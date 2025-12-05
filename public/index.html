@@ -4,7 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Chatbot with Passkey Auth</title>
-    <script src="config.js"></script>
+    <script>
+        console.log('HTML loaded');
+        window.addEventListener('error', function(e) {
+            console.error('Script error:', e.filename, e.message);
+        });
+    </script>
+    <script src="config.js" onerror="console.error('Failed to load config.js')"></script>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         .container { display: none; }
@@ -39,6 +45,12 @@
         <button onclick="logout()" style="background: #dc3545;">Logout</button>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js" onerror="console.error('Failed to load app.js')"></script>
+    <script>
+        console.log('Checking if functions exist:');
+        console.log('signup function:', typeof signup);
+        console.log('login function:', typeof login);
+        console.log('window.AUTH0_CONFIG:', window.AUTH0_CONFIG);
+    </script>
 </body>
 </html>

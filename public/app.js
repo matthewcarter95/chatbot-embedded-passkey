@@ -1,9 +1,14 @@
+console.log('app.js loading...');
+
 let currentUser = null;
-const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
-const CLIENT_ID = window.AUTH0_CONFIG.clientId;
+const AUTH0_DOMAIN = window.AUTH0_CONFIG?.domain;
+const CLIENT_ID = window.AUTH0_CONFIG?.clientId;
+
+console.log('app.js loaded, AUTH0_DOMAIN:', AUTH0_DOMAIN, 'CLIENT_ID:', CLIENT_ID);
 
 // Sign up with passkey using Auth0 Native Passkeys API
-async function signup() {
+window.signup = async function signup() {
+    console.log('signup function called');
     try {
         clearError();
         
@@ -64,7 +69,8 @@ async function signup() {
 }
 
 // Login with passkey using Auth0 Native Passkeys API
-async function login() {
+window.login = async function login() {
+    console.log('login function called');
     try {
         clearError();
         
@@ -127,14 +133,16 @@ async function login() {
 }
 
 // Logout
-function logout() {
+window.logout = function logout() {
+    console.log('logout function called');
     localStorage.removeItem('access_token');
     currentUser = null;
     showLoginInterface();
 }
 
 // Send chat message
-async function sendMessage() {
+window.sendMessage = async function sendMessage() {
+    console.log('sendMessage function called');
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
     

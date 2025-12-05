@@ -1,3 +1,5 @@
+console.log('config.js loading...');
+
 // Auth0 Configuration
 const AUTH0_CONFIG = {
     domain: 'agentic-ai-rag.cic-demo-platform.auth0app.com',
@@ -5,3 +7,4 @@ const AUTH0_CONFIG = {
 };
 
 window.AUTH0_CONFIG = AUTH0_CONFIG;
+console.log('config.js loaded, AUTH0_CONFIG:', AUTH0_CONFIG);
