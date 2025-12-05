@@ -6,11 +6,15 @@
     <title>AI Chatbot with Passkey Auth</title>
     <script>
         console.log('HTML loaded');
-        window.addEventListener('error', function(e) {
-            console.error('Script error:', e.filename, e.message);
-        });
+        
+        // Auth0 Configuration (embedded)
+        const AUTH0_CONFIG = {
+            domain: 'agentic-ai-rag.cic-demo-platform.auth0app.com',
+            clientId: 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W'
+        };
+        window.AUTH0_CONFIG = AUTH0_CONFIG;
+        console.log('AUTH0_CONFIG loaded:', AUTH0_CONFIG);
     </script>
-    <script src="config.js" onerror="console.error('Failed to load config.js')"></script>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         .container { display: none; }
@@ -45,12 +49,201 @@
         <button onclick="logout()" style="background: #dc3545;">Logout</button>
     </div>
 
-    <script src="app.js" onerror="console.error('Failed to load app.js')"></script>
     <script>
-        console.log('Checking if functions exist:');
-        console.log('signup function:', typeof signup);
-        console.log('login function:', typeof login);
-        console.log('window.AUTH0_CONFIG:', window.AUTH0_CONFIG);
+        console.log('Loading app functions...');
+        
+        let currentUser = null;
+        const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
+        const CLIENT_ID = window.AUTH0_CONFIG.clientId;
+        
+        // Sign up with passkey
+        window.signup = async function() {
+            try {
+                clearError();
+                console.log('Starting signup...');
+                
+                const email = prompt('Enter your email:');
+                if (!email) return;
+                
+                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup/challenge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_id: CLIENT_ID, email: email })
+                });
+                
+                const challengeData = await challengeResponse.json();
+                if (!challengeResponse.ok) {
+                    throw new Error(challengeData.error_description || 'Challenge request failed');
+                }
+                
+                const credential = await navigator.credentials.create({ publicKey: challengeData.publicKey });
+                
+                const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        client_id: CLIENT_ID,
+                        challenge_id: challengeData.challenge_id,
+                        credential: {
+                            id: credential.id,
+                            rawId: Array.from(new Uint8Array(credential.rawId)),
+                            response: {
+                                clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
+                                attestationObject: Array.from(new Uint8Array(credential.response.attestationObject))
+                            },
+                            type: credential.type
+                        }
+                    })
+                });
+                
+                const signupData = await signupResponse.json();
+                if (!signupResponse.ok) {
+                    throw new Error(signupData.error_description || 'Signup failed');
+                }
+                
+                localStorage.setItem('access_token', signupData.access_token);
+                currentUser = { email: email, sub: signupData.user_id };
+                showChatInterface();
+                
+            } catch (error) {
+                showError('Signup failed: ' + error.message);
+            }
+        };
+        
+        // Login with passkey
+        window.login = async function() {
+            try {
+                clearError();
+                console.log('Starting login...');
+                
+                const email = prompt('Enter your email:');
+                if (!email) return;
+                
+                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login/challenge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_id: CLIENT_ID, email: email })
+                });
+                
+                const challengeData = await challengeResponse.json();
+                if (!challengeResponse.ok) {
+                    throw new Error(challengeData.error_description || 'Challenge request failed');
+                }
+                
+                const assertion = await navigator.credentials.get({ publicKey: challengeData.publicKey });
+                
+                const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        client_id: CLIENT_ID,
+                        challenge_id: challengeData.challenge_id,
+                        credential: {
+                            id: assertion.id,
+                            rawId: Array.from(new Uint8Array(assertion.rawId)),
+                            response: {
+                                clientDataJSON: Array.from(new Uint8Array(assertion.response.clientDataJSON)),
+                                authenticatorData: Array.from(new Uint8Array(assertion.response.authenticatorData)),
+                                signature: Array.from(new Uint8Array(assertion.response.signature)),
+                                userHandle: assertion.response.userHandle ? Array.from(new Uint8Array(assertion.response.userHandle)) : null
+                            },
+                            type: assertion.type
+                        }
+                    })
+                });
+                
+                const loginData = await loginResponse.json();
+                if (!loginResponse.ok) {
+                    throw new Error(loginData.error_description || 'Login failed');
+                }
+                
+                localStorage.setItem('access_token', loginData.access_token);
+                currentUser = { email: email, sub: loginData.user_id };
+                showChatInterface();
+                
+            } catch (error) {
+                showError('Login failed: ' + error.message);
+            }
+        };
+        
+        // Logout
+        window.logout = function() {
+            localStorage.removeItem('access_token');
+            currentUser = null;
+            showLoginInterface();
+        };
+        
+        // Send message
+        window.sendMessage = async function() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            addMessageToChat(message, 'user');
+            input.value = '';
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ message: message, userId: currentUser.sub })
+                });
+                
+                const data = await response.json();
+                addMessageToChat(response.ok ? data.response : 'Error: ' + data.error, 'bot');
+            } catch (error) {
+                addMessageToChat('Error: ' + error.message, 'bot');
+            }
+        };
+        
+        // Helper functions
+        function addMessageToChat(message, sender) {
+            const chatBox = document.getElementById('chatBox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = message;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+        
+        function showChatInterface() {
+            document.getElementById('loginContainer').classList.remove('active');
+            document.getElementById('chatContainer').classList.add('active');
+            document.getElementById('userInfo').innerHTML = `<p>Welcome, ${currentUser.email}!</p>`;
+        }
+        
+        function showLoginInterface() {
+            document.getElementById('chatContainer').classList.remove('active');
+            document.getElementById('loginContainer').classList.add('active');
+            document.getElementById('chatBox').innerHTML = '';
+        }
+        
+        function showError(message) {
+            document.getElementById('authError').textContent = message;
+        }
+        
+        function clearError() {
+            document.getElementById('authError').textContent = '';
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') sendMessage();
+            });
+            
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                currentUser = { email: 'user@example.com', sub: 'auth0|user' };
+                showChatInterface();
+            }
+        });
+        
+        console.log('All functions loaded successfully');
     </script>
 </body>
 </html>
