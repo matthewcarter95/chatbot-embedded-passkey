@@ -11,6 +11,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Serve static files explicitly for Vercel
+app.get('/config.js', (req, res) => {
+  res.sendFile(__dirname + '/public/config.js');
+});
+
+app.get('/app.js', (req, res) => {
+  res.sendFile(__dirname + '/public/app.js');
+});
+
 // Root route for Vercel
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
