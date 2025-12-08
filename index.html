@@ -37,7 +37,7 @@
     </div>
 
     <script>
-        const AUTH0_DOMAIN = 'agentic-ai-rag.cic-demo-platform.auth0app.com';
+        const AUTH0_DOMAIN = 'passkey.demo-connect.us'; // Update this to your custom domain if you have one
         const CLIENT_ID = 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W';
         let currentUser = null;
 
@@ -47,7 +47,7 @@
                 const email = prompt('Enter your email:');
                 if (!email) return;
 
-                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup/challenge`, {
+                const challengeResponse = await fetch('/api/passkey-signup-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_id: CLIENT_ID, email: email })
@@ -60,7 +60,7 @@
 
                 const credential = await navigator.credentials.create({ publicKey: challengeData.publicKey });
 
-                const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup`, {
+                const signupResponse = await fetch('/api/passkey-signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -98,7 +98,7 @@
                 const email = prompt('Enter your email:');
                 if (!email) return;
 
-                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login/challenge`, {
+                const challengeResponse = await fetch('/api/passkey-login-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_id: CLIENT_ID, email: email })
@@ -111,7 +111,7 @@
 
                 const assertion = await navigator.credentials.get({ publicKey: challengeData.publicKey });
 
-                const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login`, {
+                const loginResponse = await fetch('/api/passkey-login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
