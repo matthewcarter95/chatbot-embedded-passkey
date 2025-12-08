@@ -58,6 +58,8 @@
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
 
+                // Ensure rpId matches your domain
+                challengeData.publicKey.rp.id = 'demo-connect.us';
                 const credential = await navigator.credentials.create({ publicKey: challengeData.publicKey });
 
                 const signupResponse = await fetch('/api/passkey-signup', {
@@ -109,6 +111,8 @@
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
 
+                // Ensure rpId matches your domain
+                challengeData.publicKey.rpId = 'demo-connect.us';
                 const assertion = await navigator.credentials.get({ publicKey: challengeData.publicKey });
 
                 const loginResponse = await fetch('/api/passkey-login', {
