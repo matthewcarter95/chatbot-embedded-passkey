@@ -89,6 +89,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         auth_session: challengeData.auth_session,
+                        user_profile: { email: email },
                         credential: {
                             id: credential.id,
                             rawId: Array.from(new Uint8Array(credential.rawId)),
