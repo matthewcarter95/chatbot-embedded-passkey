@@ -76,13 +76,17 @@
                 });
                 
                 const challengeData = await challengeResponse.json();
+                console.log('Challenge data:', challengeData);
                 if (!challengeResponse.ok) {
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
                 
-                // Ensure rpId matches your domain
-                challengeData.publicKey.rp.id = 'demo-connect.us';
-                const credential = await navigator.credentials.create({ publicKey: challengeData.publicKey });
+                // Auth0 returns authn_params_public_key, not publicKey
+                const publicKeyOptions = challengeData.authn_params_public_key;
+                if (publicKeyOptions && publicKeyOptions.rp) {
+                    publicKeyOptions.rp.id = 'demo-connect.us';
+                }
+                const credential = await navigator.credentials.create({ publicKey: publicKeyOptions });
                 
                 const signupResponse = await fetch('/api/passkey-signup', {
                     method: 'POST',
@@ -136,13 +140,17 @@
                 });
                 
                 const challengeData = await challengeResponse.json();
+                console.log('Login challenge data:', challengeData);
                 if (!challengeResponse.ok) {
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
                 
-                // Ensure rpId matches your domain
-                challengeData.publicKey.rpId = 'demo-connect.us';
-                const assertion = await navigator.credentials.get({ publicKey: challengeData.publicKey });
+                // Auth0 returns authn_params_public_key, not publicKey
+                const publicKeyOptions = challengeData.authn_params_public_key;
+                if (publicKeyOptions) {
+                    publicKeyOptions.rpId = 'demo-connect.us';
+                }
+                const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions });
                 
                 const loginResponse = await fetch('/api/passkey-login', {
                     method: 'POST',
