@@ -2,7 +2,7 @@ console.log('config.js loading...');
 
 // Auth0 Configuration
 const AUTH0_CONFIG = {
-    domain: 'agentic-ai-rag.cic-demo-platform.auth0app.com',
+    domain: 'passkey.demo-connect.us',
     clientId: 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W'
 };
 

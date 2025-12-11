@@ -65,7 +65,7 @@
                 const email = prompt('Enter your email:');
                 if (!email) return;
                 
-                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/challenge`, {
+                const challengeResponse = await fetch('/api/passkey-signup-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_id: CLIENT_ID, email: email })
@@ -76,17 +76,25 @@
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
                 
+                // Ensure rpId matches your domain
+                challengeData.publicKey.rp.id = 'demo-connect.us';
                 const credential = await navigator.credentials.create({ publicKey: challengeData.publicKey });
                 
-                const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/register`, {
+                const signupResponse = await fetch('/api/passkey-signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         client_id: CLIENT_ID,
-                        realm: 'DefaultTenantPasskey',
-                        user_profile: {
-                            email: 
-                        },
+                        challenge_id: challengeData.challenge_id,
+                        credential: {
+                            id: credential.id,
+                            rawId: Array.from(new Uint8Array(credential.rawId)),
+                            response: {
+                                clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
+                                attestationObject: Array.from(new Uint8Array(credential.response.attestationObject))
+                            },
+                            type: credential.type
+                        }
                     })
                 });
                 
@@ -96,7 +104,7 @@
                 }
                 
                 localStorage.setItem('access_token', signupData.access_token);
-                currentUser = { email: email, sub: signupData.user.id };
+                currentUser = { email: email, sub: signupData.user_id };
                 showChatInterface();
                 
             } catch (error) {
@@ -113,7 +121,7 @@
                 const email = prompt('Enter your email:');
                 if (!email) return;
                 
-                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
+                const challengeResponse = await fetch('/api/passkey-login-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_id: CLIENT_ID, email: email })
@@ -124,9 +132,11 @@
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
                 
+                // Ensure rpId matches your domain
+                challengeData.publicKey.rpId = 'demo-connect.us';
                 const assertion = await navigator.credentials.get({ publicKey: challengeData.publicKey });
                 
-                const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
+                const loginResponse = await fetch('/api/passkey-login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

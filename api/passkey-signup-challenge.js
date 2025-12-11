@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/api/v1/passkeys/signup/challenge`, req.body, {
+    const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/passkey/challenge`, req.body, {
       headers: { 'Content-Type': 'application/json' }
     });
     
