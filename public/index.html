@@ -56,6 +56,18 @@
         const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
         const CLIENT_ID = window.AUTH0_CONFIG.clientId;
         
+        // Base64URL conversion function
+        function base64UrlToBuffer(base64url) {
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            const binary = atob(base64);
+            const buffer = new ArrayBuffer(binary.length);
+            const view = new Uint8Array(buffer);
+            for (let i = 0; i < binary.length; i++) {
+                view[i] = binary.charCodeAt(i);
+            }
+            return buffer;
+        }
+        
         // Sign up with passkey
         window.signup = async function() {
             try {
@@ -83,9 +95,14 @@
                 
                 // Auth0 returns authn_params_public_key, not publicKey
                 const publicKeyOptions = challengeData.authn_params_public_key;
-                if (publicKeyOptions && publicKeyOptions.rp) {
-                    publicKeyOptions.rp.id = 'demo-connect.us';
-                }
+                
+                // Convert Base64URL strings to ArrayBuffers
+                publicKeyOptions.challenge = base64UrlToBuffer(publicKeyOptions.challenge);
+                publicKeyOptions.user.id = base64UrlToBuffer(publicKeyOptions.user.id);
+                
+                // Set rpId
+                publicKeyOptions.rp.id = 'demo-connect.us';
+                
                 const credential = await navigator.credentials.create({ publicKey: publicKeyOptions });
                 
                 const signupResponse = await fetch('/api/passkey-signup', {
@@ -147,9 +164,13 @@
                 
                 // Auth0 returns authn_params_public_key, not publicKey
                 const publicKeyOptions = challengeData.authn_params_public_key;
-                if (publicKeyOptions) {
-                    publicKeyOptions.rpId = 'demo-connect.us';
-                }
+                
+                // Convert Base64URL challenge to ArrayBuffer
+                publicKeyOptions.challenge = base64UrlToBuffer(publicKeyOptions.challenge);
+                
+                // Set rpId
+                publicKeyOptions.rpId = 'demo-connect.us';
+                
                 const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions });
                 
                 const loginResponse = await fetch('/api/passkey-login', {
