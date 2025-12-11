@@ -21,10 +21,10 @@ window.signup = async function signup() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 client_id: CLIENT_ID,
-                realm: 'DefaultTenantPasskey',
-                user_profile: {
-                    email: email
-                }
+                realm: 'DefaultTenantPasskey'
+                // user_profile: {
+                //     email: email
+                // }
             })
         });
         
