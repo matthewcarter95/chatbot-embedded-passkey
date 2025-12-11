@@ -6,10 +6,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Add user_profile if not present (needed for completion call)
+    // Add required fields for OAuth token endpoint
     const requestBody = {
-      ...req.body,
-      user_profile: req.body.user_profile || { email: req.body.email }
+      grant_type: 'urn:okta:params:oauth:grant-type:webauthn',
+      ...req.body
     };
     
     const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, requestBody, {
