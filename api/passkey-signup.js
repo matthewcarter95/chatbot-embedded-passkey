@@ -9,7 +9,9 @@ module.exports = async (req, res) => {
     // Add required fields for OAuth token endpoint
     const requestBody = {
       grant_type: 'urn:okta:params:oauth:grant-type:webauthn',
-      ...req.body
+      client_id: req.body.client_id,
+      auth_session: req.body.auth_session,
+      authn_response: req.body.authn_response
     };
     
     const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, requestBody, {
