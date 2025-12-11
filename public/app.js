@@ -16,7 +16,7 @@ window.signup = async function signup() {
         if (!email) return;
         
         // Step 1: Request signup challenge
-        const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/challenge`, {
+        const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -29,41 +29,78 @@ window.signup = async function signup() {
         });
         
         const challengeData = await challengeResponse.json();
+        console.log(challengeData);
         if (!challengeResponse.ok) {
-            throw new Error(challengeData.error_description || 'Challenge request failed');
+            throw new Error(challengeData.error_description || 'Register request failed');
         }
+
+        // --- Step 2: Create WebAuthn credential ---
+        // The challenge and user.id must be converted from Base64URL string (from Auth0) 
+        // into an ArrayBuffer (expected by WebAuthn API).
+        const publicKeyOptions = challengeData.authn_params_public_key;
         
-        // Step 2: Create WebAuthn credential
-        const credential = await navigator.credentials.create({
-            publicKey: challengeData.publicKey
-        });
+        publicKeyOptions.challenge = base64UrlToBuffer(publicKeyOptions.challenge);
+        publicKeyOptions.user.id = base64UrlToBuffer(publicKeyOptions.user.id);
         
-        // Step 3: Complete signup
-        const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/register`, {
+        try {
+            
+            // This prompts the user to create the passkey.
+            const credential = await navigator.credentials.create({
+                publicKey: publicKeyOptions
+            });
+
+            // The 'credential' object is the assertion/response we need to format.
+            // It's a PublicKeyCredential object.
+
+            // --- Step 3: Format the Assertion and Complete Signup ---
+            
+            // 3a. Extract and Base64URL-encode the necessary ArrayBuffer properties
+            const assertion = {
+                id: credential.id,
+                rawId: bufferToBase64Url(credential.rawId),
+                type: credential.type,
+                response: {
+                    clientDataJSON: bufferToBase64Url(credential.response.clientDataJSON),
+                    // For Registration, we send attestationObject, not authenticatorData/signature.
+                    attestationObject: bufferToBase64Url(credential.response.attestationObject),
+                    
+                    // These properties are for authentication, not registration.
+                    // signature: (not needed for registration)
+                    // authenticatorData: (not needed for registration)
+                    // userHandle: (not needed for registration)
+                }
+            };
+
+        // 3b. Call the Auth0 /oauth/token endpoint with the assertion
+        const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                grant_type: 'urn:okta:params:oauth:grant-type:webauthn',
                 client_id: CLIENT_ID,
-                challenge_id: challengeData.challenge_id,
-                credential: {
-                    id: credential.id,
-                    rawId: Array.from(new Uint8Array(credential.rawId)),
-                    response: {
-                        clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
-                        attestationObject: Array.from(new Uint8Array(credential.response.attestationObject))
-                    },
-                    type: credential.type
-                }
+                realm: 'DefaultTenantPasskey',
+                audience: `https://passkey.demo-connect.us`,
+                auth_session: challengeData.auth_session,
+                
+                // CRITICAL CORRECTION: Use 'webauthn_credential_assertion' field.
+                webauthn_credential_assertion: assertion
             })
         });
         
-        const signupData = await signupResponse.json();
-        if (!signupResponse.ok) {
-            throw new Error(signupData.error_description || 'Signup failed');
+        const loginData = await loginResponse.json();
+        if (!loginResponse.ok) {
+            throw new Error(loginData.error_description || 'Login failed');
         }
         
-        localStorage.setItem('access_token', signupData.access_token);
-        currentUser = { email: email, sub: signupData.user_id };
+        const tokenData = await loginResponse.json();
+        if (!loginResponse.ok) {
+            throw new Error(tokenData.error_description || 'Token request failed');
+        }
+
+        console.log("Passkey Registration Successful. Tokens:", tokenData);
+
+        localStorage.setItem('access_token', loginData.access_token);
+        currentUser = { email: email, sub: loginData.user_id };
         showChatInterface();
         
     } catch (error) {
@@ -200,6 +237,58 @@ function addMessageToChat(message, sender) {
 function showChatInterface() {
     document.getElementById('loginContainer').classList.remove('active');
     document.getElementById('chatContainer').classList.add('active');
+    document.getElementById('userInfo').innerHTML = `<p>Welcome, ${currentUser.email}!</p>`;
+}
+
+// Show login interface
+function showLoginInterface() {
+    document.getElementById('chatContainer').classList.remove('active');
+    document.getElementById('loginContainer').classList.add('active');
+    document.getElementById('chatBox').innerHTML = '';
+}
+
+// Error handling
+function showError(message) {
+    document.getElementById('authError').textContent = message;
+}
+
+function clearError() {
+    document.getElementById('authError').textContent = '';
+}
+
+// Base64URL conversion functions
+function base64UrlToBuffer(base64url) {
+    const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(base64);
+    const buffer = new ArrayBuffer(binary.length);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < binary.length; i++) {
+        view[i] = binary.charCodeAt(i);
+    }
+    return buffer;
+}
+
+function bufferToBase64Url(buffer) {
+    const binary = String.fromCharCode(...new Uint8Array(buffer));
+    const base64 = btoa(binary);
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// Handle Enter key in message input
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('messageInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+    
+    // Check if user is already authenticated
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        currentUser = { email: 'user@example.com', sub: 'auth0|user' };
+        showChatInterface();
+    }
+});ctive');
     
     // Display user info
     document.getElementById('userInfo').innerHTML = 
@@ -221,6 +310,33 @@ function showError(message) {
 function clearError() {
     document.getElementById('authError').textContent = '';
 }
+
+
+const bufferToBase64Url = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let str = '';
+    for (const charCode of bytes) {
+        str += String.fromCharCode(charCode);
+    }
+    return btoa(str) // Standard Base64
+        .replace(/\+/g, '-') // Replace + with -
+        .replace(/\//g, '_') // Replace / with _
+        .replace(/=+$/, ''); // Remove trailing =
+};
+
+/** Converts a Base64URL string to an ArrayBuffer */
+const base64UrlToBuffer = (base64Url) => {
+    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) {
+        base64 += '=';
+    }
+    const raw = atob(base64);
+    const outputArray = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) {
+        outputArray[i] = raw.charCodeAt(i);
+    }
+    return outputArray.buffer;
+};
 
 // Handle Enter key in message input
 document.addEventListener('DOMContentLoaded', function() {
