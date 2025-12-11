@@ -16,12 +16,15 @@ window.signup = async function signup() {
         if (!email) return;
         
         // Step 1: Request signup challenge
-        const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup/challenge`, {
+        const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/challenge`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 client_id: CLIENT_ID,
-                email: email
+                realm: 'DefaultTenantPasskey',
+                user_profile: {
+                    email: email
+                }
             })
         });
         
@@ -36,7 +39,7 @@ window.signup = async function signup() {
         });
         
         // Step 3: Complete signup
-        const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup`, {
+        const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -78,12 +81,12 @@ window.login = async function login() {
         if (!email) return;
         
         // Step 1: Request login challenge
-        const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login/challenge`, {
+        const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/challenge`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 client_id: CLIENT_ID,
-                email: email
+                realm: 'DefaultTenantPasskey'
             })
         });
         
@@ -98,13 +101,16 @@ window.login = async function login() {
         });
         
         // Step 3: Complete login
-        const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login`, {
+        const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                grant_type: 'urn:okta:params:oauth:grant-type:webauthn',
                 client_id: CLIENT_ID,
-                challenge_id: challengeData.challenge_id,
-                credential: {
+                realm: 'DefaultTenantPasskey',
+                audience: `https://passkey.demo-connect.us`,
+                auth_session: challengeData.auth_session,
+                authn_response: {
                     id: assertion.id,
                     rawId: Array.from(new Uint8Array(assertion.rawId)),
                     response: {
@@ -114,7 +120,7 @@ window.login = async function login() {
                         userHandle: assertion.response.userHandle ? Array.from(new Uint8Array(assertion.response.userHandle)) : null
                     },
                     type: assertion.type
-                }
+                },
             })
         });
         

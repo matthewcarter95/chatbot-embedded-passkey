@@ -65,7 +65,7 @@
                 const email = prompt('Enter your email:');
                 if (!email) return;
                 
-                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup/challenge`, {
+                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/challenge`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_id: CLIENT_ID, email: email })
@@ -78,21 +78,15 @@
                 
                 const credential = await navigator.credentials.create({ publicKey: challengeData.publicKey });
                 
-                const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/signup`, {
+                const signupResponse = await fetch(`https://${AUTH0_DOMAIN}/passkey/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         client_id: CLIENT_ID,
-                        challenge_id: challengeData.challenge_id,
-                        credential: {
-                            id: credential.id,
-                            rawId: Array.from(new Uint8Array(credential.rawId)),
-                            response: {
-                                clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
-                                attestationObject: Array.from(new Uint8Array(credential.response.attestationObject))
-                            },
-                            type: credential.type
-                        }
+                        realm: 'DefaultTenantPasskey',
+                        user_profile: {
+                            email: 
+                        },
                     })
                 });
                 
@@ -102,7 +96,7 @@
                 }
                 
                 localStorage.setItem('access_token', signupData.access_token);
-                currentUser = { email: email, sub: signupData.user_id };
+                currentUser = { email: email, sub: signupData.user.id };
                 showChatInterface();
                 
             } catch (error) {
@@ -119,7 +113,7 @@
                 const email = prompt('Enter your email:');
                 if (!email) return;
                 
-                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login/challenge`, {
+                const challengeResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_id: CLIENT_ID, email: email })
@@ -132,7 +126,7 @@
                 
                 const assertion = await navigator.credentials.get({ publicKey: challengeData.publicKey });
                 
-                const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v1/passkeys/login`, {
+                const loginResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
