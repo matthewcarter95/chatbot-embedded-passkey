@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
       user_profile: req.body.user_profile || { email: req.body.email }
     };
     
-    const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/passkey/register`, requestBody, {
+    const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, requestBody, {
       headers: { 'Content-Type': 'application/json' }
     });
     
