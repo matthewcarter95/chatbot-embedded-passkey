@@ -83,12 +83,12 @@
                 
                 const credential = await navigator.credentials.create({ publicKey: publicKeyOptions });
 
-                const signupResponse = await fetch('/api/passkey-signup', {
+                // Complete registration with credential
+                const registrationResponse = await fetch('/api/passkey-signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        client_id: CLIENT_ID,
-                        challenge_id: challengeData.challenge_id,
+                        auth_session: challengeData.auth_session,
                         credential: {
                             id: credential.id,
                             rawId: Array.from(new Uint8Array(credential.rawId)),
@@ -101,13 +101,13 @@
                     })
                 });
 
-                const signupData = await signupResponse.json();
-                if (!signupResponse.ok) {
-                    throw new Error(signupData.error_description || 'Signup failed');
+                const registrationData = await registrationResponse.json();
+                if (!registrationResponse.ok) {
+                    throw new Error(registrationData.error_description || 'Registration failed');
                 }
 
-                localStorage.setItem('access_token', signupData.access_token);
-                currentUser = { email: email, sub: signupData.user_id };
+                localStorage.setItem('access_token', registrationData.access_token);
+                currentUser = { email: email, sub: registrationData.user_id };
                 showChatInterface();
 
             } catch (error) {
