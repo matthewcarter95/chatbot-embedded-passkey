@@ -68,7 +68,11 @@
                 const challengeResponse = await fetch('/api/passkey-signup-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ client_id: CLIENT_ID, email: email })
+                    body: JSON.stringify({ 
+                        client_id: CLIENT_ID,
+                        realm: 'DefaultTenantPasskey',
+                        user_profile: { email: email }
+                    })
                 });
                 
                 const challengeData = await challengeResponse.json();
@@ -124,7 +128,11 @@
                 const challengeResponse = await fetch('/api/passkey-login-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ client_id: CLIENT_ID, email: email })
+                    body: JSON.stringify({ 
+                        client_id: CLIENT_ID,
+                        realm: 'DefaultTenantPasskey',
+                        user_profile: { email: email }
+                    })
                 });
                 
                 const challengeData = await challengeResponse.json();
