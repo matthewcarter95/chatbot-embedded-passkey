@@ -88,7 +88,8 @@
                 });
                 
                 const challengeData = await challengeResponse.json();
-                console.log('Challenge data:', challengeData);
+                console.log('Signup challenge data:', challengeData);
+                console.log('authSession: ' + challengeData.auth_session);
                 if (!challengeResponse.ok) {
                     throw new Error(challengeData.error_description || 'Challenge request failed');
                 }
@@ -111,6 +112,7 @@
                     body: JSON.stringify({
                         client_id: CLIENT_ID,
                         challenge_id: challengeData.challenge_id,
+                        auth_session: challengeData.auth_session,
                         credential: {
                             id: credential.id,
                             rawId: Array.from(new Uint8Array(credential.rawId)),
@@ -151,8 +153,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         client_id: CLIENT_ID,
-                        realm: 'DefaultTenantPasskey',
-                        user_profile: { email: email }
+                        realm: 'DefaultTenantPasskey'
+                        // user_profile: { email: email }
                     })
                 });
                 

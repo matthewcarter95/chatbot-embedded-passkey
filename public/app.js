@@ -30,7 +30,7 @@ window.signup = async function signup() {
         });
         
         const challengeData = await challengeResponse.json();
-        console.log(challengeData);
+        
         if (!challengeResponse.ok) {
             throw new Error(challengeData.error_description || 'Register request failed');
         }
