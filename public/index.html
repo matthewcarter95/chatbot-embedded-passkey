@@ -114,7 +114,7 @@
                 publicKeyOptions.user.id = base64UrlToBuffer(publicKeyOptions.user.id);
                 
                 // Set rpId
-                // publicKeyOptions.rp.id = 'demo-connect.us';
+                publicKeyOptions.rp.id = 'demo-connect.us';
                 
                 const credential = await navigator.credentials.create({ publicKey: publicKeyOptions });
                 
@@ -185,7 +185,7 @@
                 publicKeyOptions.challenge = base64UrlToBuffer(publicKeyOptions.challenge);
                 
                 // Set rpId
-                // publicKeyOptions.rpId = 'demo-connect.us';
+                publicKeyOptions.rpId = 'demo-connect.us';
                 
                 const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions });
                 
