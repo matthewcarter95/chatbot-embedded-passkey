@@ -6,15 +6,13 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // console.log('Request body:', req.body);
-    // Add required fields for OAuth token endpoint
     const requestBody = {
       grant_type: 'urn:okta:params:oauth:grant-type:webauthn',
       client_id: req.body.client_id,
       auth_session: req.body.auth_session,
-      authn_response: req.body.authn_response
+      // CORRECTED: Use req.body.credential from the frontend
+      authn_response: req.body.credential 
     };
-    // console.log('Sending to Auth0:', requestBody);
     
     const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, requestBody, {
       headers: { 'Content-Type': 'application/json' }
