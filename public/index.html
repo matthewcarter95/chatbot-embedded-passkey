@@ -113,8 +113,8 @@
                 publicKeyOptions.challenge = base64UrlToBuffer(publicKeyOptions.challenge);
                 publicKeyOptions.user.id = base64UrlToBuffer(publicKeyOptions.user.id);
                 
-                // Set rpId to match current domain exactly
-                publicKeyOptions.rp.id = 'passkey.demo-connect.us';
+                // Set rpId to match the configured relying party identifier
+                publicKeyOptions.rp.id = 'demo-connect.us';
                 
                 const credential = await navigator.credentials.create({ publicKey: publicKeyOptions });
                 
@@ -184,8 +184,8 @@
                 // Convert Base64URL challenge to ArrayBuffer
                 publicKeyOptions.challenge = base64UrlToBuffer(publicKeyOptions.challenge);
                 
-                // Set rpId to match current domain exactly
-                publicKeyOptions.rpId = 'passkey.demo-connect.us';
+                // Set rpId to match the configured relying party identifier
+                publicKeyOptions.rpId = 'demo-connect.us';
                 
                 const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions });
                 
