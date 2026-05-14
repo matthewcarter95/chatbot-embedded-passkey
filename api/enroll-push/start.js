@@ -24,6 +24,7 @@ module.exports = async (req, res) => {
       return res.status(create.status).json({
         error: 'MyAccount enrollment failed',
         detail: create.data,
+        token_claims: create.tokenClaims || null,
         refresh_token
       });
     }

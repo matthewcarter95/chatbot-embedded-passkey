@@ -21,6 +21,7 @@ module.exports = async (req, res) => {
       return res.status(list.status).json({
         error: 'MyAccount list failed',
         detail: list.data,
+        token_claims: list.tokenClaims || null,
         refresh_token
       });
     }
