@@ -48,7 +48,16 @@ module.exports = async (req, res) => {
     'If the user asks to enroll a push factor / MFA / Guardian / authenticator / QR code, ' +
     'OR agrees to enrolling when asked (yes, sure, ok, let\'s do it, go ahead, etc.), ' +
     'end your reply with the exact token [[ENROLL_PUSH]] on its own line and nothing after. ' +
-    'Do not mention the token itself to the user. Keep the reply short — one sentence confirming you\'re starting the enrollment is enough.'
+    'Do not mention the token itself to the user. Keep the reply short — one sentence confirming you\'re starting the enrollment is enough.',
+    '',
+    'ADD BENEFICIARY TRIGGER: When the user wants to add a beneficiary to their account, ' +
+    'you must gather two fields — full legal name (string) and percentage allotted (integer 1-100). ' +
+    'If either is missing, ASK for the missing one and stop. ' +
+    'When you have both, end your reply with exactly this JSON token on its own line: ' +
+    '[[ADD_BENEFICIARY:{"name":"<full legal name>","percentage":<integer>}]] ' +
+    'Valid example: [[ADD_BENEFICIARY:{"name":"Jane Doe","percentage":100}]]. ' +
+    'Do not mention this token to the user. Reply text should simply confirm you are initiating an approval request on their phone. ' +
+    'You do not and cannot actually add the beneficiary yourself — the UI handles that via a push approval flow.'
   ];
 
   if (needsPushEnrollment) {

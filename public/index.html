@@ -49,6 +49,14 @@
         <button onclick="startPushEnrollment()" style="background: #28a745;">Enroll Push MFA</button>
         <button onclick="logout()" style="background: #dc3545;">Logout</button>
 
+        <!-- CIBA transaction approval panel -->
+        <div id="cibaPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #007bff; border-radius:8px; background:#eef4ff;">
+            <h3 style="margin:0 0 8px 0;">Transaction approval pending</h3>
+            <p id="cibaMessage" style="margin:4px 0;"></p>
+            <p id="cibaStatus" style="margin:4px 0; font-weight:bold;">Check your phone and approve the push…</p>
+            <button id="cibaCancel" onclick="cancelCiba()" style="background:#6c757d;">Cancel</button>
+        </div>
+
         <!-- Push enrollment QR overlay -->
         <div id="enrollPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #ccc; border-radius:8px; background:#fafafa;">
             <h3 style="margin:0 0 8px 0;">Enroll push notifications</h3>
@@ -73,6 +81,8 @@
         let needsPushEnrollment = false;
         let pendingEnrollment = null; // { id, auth_session }
         let enrollmentPollTimer = null;
+        let pendingCiba = null; // { auth_req_id, beneficiary }
+        let cibaPollTimer = null;
         const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
         const CLIENT_ID = window.AUTH0_CONFIG.clientId;
 
@@ -120,7 +130,9 @@
             conversationHistory = [];
             needsPushEnrollment = false;
             pendingEnrollment = null;
+            pendingCiba = null;
             if (enrollmentPollTimer) { clearTimeout(enrollmentPollTimer); enrollmentPollTimer = null; }
+            if (cibaPollTimer) { clearTimeout(cibaPollTimer); cibaPollTimer = null; }
         }
         
         function bufferToBase64Url(buffer) {
@@ -317,12 +329,24 @@
                 if (response.ok) {
                     const raw = data.response || '';
                     const enrollSignal = /\[\[ENROLL_PUSH\]\]/.test(raw);
-                    const visible = raw.replace(/\s*\[\[ENROLL_PUSH\]\]\s*$/m, '').trim();
+                    const benefMatch = raw.match(/\[\[ADD_BENEFICIARY:(\{[^\]]+\})\]\]/);
+                    let visible = raw
+                        .replace(/\s*\[\[ENROLL_PUSH\]\]\s*$/m, '')
+                        .replace(/\s*\[\[ADD_BENEFICIARY:\{[^\]]+\}\]\]\s*$/m, '')
+                        .trim();
                     if (visible) addMessageToChat(visible, 'bot');
                     conversationHistory.push({ role: 'user', content: message });
                     conversationHistory.push({ role: 'assistant', content: visible });
                     if (enrollSignal && needsPushEnrollment) {
                         startPushEnrollment();
+                    }
+                    if (benefMatch) {
+                        try {
+                            const beneficiary = JSON.parse(benefMatch[1]);
+                            startCibaApproval(beneficiary);
+                        } catch (e) {
+                            addMessageToChat('Could not parse beneficiary payload from reply.', 'bot');
+                        }
                     }
                 } else {
                     addMessageToChat('Error: ' + (data.error || response.statusText), 'bot');
@@ -355,6 +379,7 @@
             document.getElementById('loginContainer').classList.add('active');
             document.getElementById('chatBox').innerHTML = '';
             document.getElementById('enrollPanel').style.display = 'none';
+            document.getElementById('cibaPanel').style.display = 'none';
         }
 
         async function checkPushEnrollment() {
@@ -457,6 +482,114 @@
             hideEnrollmentPanel();
             addMessageToChat('Enrollment cancelled. You can ask me again later.', 'bot');
         };
+
+        async function startCibaApproval(beneficiary) {
+            const idToken = localStorage.getItem('id_token');
+            if (!idToken) {
+                addMessageToChat('Cannot initiate approval: not authenticated.', 'bot');
+                return;
+            }
+            if (!beneficiary || !beneficiary.name || !beneficiary.percentage) {
+                addMessageToChat('Beneficiary details incomplete.', 'bot');
+                return;
+            }
+            try {
+                const res = await fetch('/api/ciba/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({ beneficiary })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    addMessageToChat('Approval request failed: ' + (data.error || res.statusText) + ' ' + (data.detail ? JSON.stringify(data.detail) : ''), 'bot');
+                    return;
+                }
+                pendingCiba = { auth_req_id: data.auth_req_id, beneficiary };
+                showCibaPanel(data.binding_message || `Add ${beneficiary.name} as ${beneficiary.percentage}% beneficiary`);
+                pollCiba(data.interval || 5);
+            } catch (e) {
+                addMessageToChat('Approval request error: ' + e.message, 'bot');
+            }
+        }
+
+        function showCibaPanel(message) {
+            document.getElementById('cibaMessage').textContent = message;
+            document.getElementById('cibaStatus').textContent = 'Check your phone and approve the push…';
+            document.getElementById('cibaPanel').style.display = 'block';
+        }
+
+        function hideCibaPanel() {
+            document.getElementById('cibaPanel').style.display = 'none';
+            if (cibaPollTimer) { clearTimeout(cibaPollTimer); cibaPollTimer = null; }
+        }
+
+        window.cancelCiba = function() {
+            pendingCiba = null;
+            hideCibaPanel();
+            addMessageToChat('Approval cancelled.', 'bot');
+        };
+
+        function pollCiba(intervalSec) {
+            const startedAt = Date.now();
+            const TIMEOUT_MS = 3 * 60 * 1000;
+            let delay = Math.max(3000, (intervalSec || 5) * 1000);
+            const MAX_DELAY = 30000;
+            if (cibaPollTimer) { clearTimeout(cibaPollTimer); cibaPollTimer = null; }
+
+            async function tick() {
+                if (!pendingCiba) return;
+                if (Date.now() - startedAt > TIMEOUT_MS) {
+                    document.getElementById('cibaStatus').textContent = 'Timed out.';
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/ciba/status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ auth_req_id: pendingCiba.auth_req_id })
+                    });
+                    const data = await res.json();
+                    if (data.slow_down) delay = Math.min(delay * 2, MAX_DELAY);
+                    if (data.status === 'approved') {
+                        const b = pendingCiba.beneficiary;
+                        pendingCiba = null;
+                        document.getElementById('cibaStatus').textContent = 'Approved!';
+                        setTimeout(hideCibaPanel, 1500);
+                        const msg = `Approved. ${b.name} added as ${b.percentage}% beneficiary.`;
+                        addMessageToChat(msg, 'bot');
+                        conversationHistory.push({ role: 'assistant', content: msg });
+                        return;
+                    }
+                    if (data.status === 'denied') {
+                        pendingCiba = null;
+                        document.getElementById('cibaStatus').textContent = 'Denied on phone.';
+                        setTimeout(hideCibaPanel, 2000);
+                        addMessageToChat('You declined the approval. Beneficiary not added.', 'bot');
+                        return;
+                    }
+                    if (data.status === 'expired') {
+                        pendingCiba = null;
+                        document.getElementById('cibaStatus').textContent = 'Request expired.';
+                        setTimeout(hideCibaPanel, 2000);
+                        addMessageToChat('The approval request timed out before you responded.', 'bot');
+                        return;
+                    }
+                    if (data.status === 'error') {
+                        pendingCiba = null;
+                        document.getElementById('cibaStatus').textContent = 'Error.';
+                        addMessageToChat('Approval error: ' + (data.error || '') + ' ' + JSON.stringify(data.detail || ''), 'bot');
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('CIBA poll error:', e);
+                }
+                cibaPollTimer = setTimeout(tick, delay);
+            }
+            cibaPollTimer = setTimeout(tick, delay);
+        }
 
         window.confirmScan = async function() {
             if (!pendingEnrollment) return;
