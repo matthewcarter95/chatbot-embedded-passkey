@@ -188,15 +188,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         client_id: CLIENT_ID,
-                        challenge_id: challengeData.challenge_id,
+                        auth_session: challengeData.auth_session,
                         credential: {
                             id: assertion.id,
-                            rawId: Array.from(new Uint8Array(assertion.rawId)),
+                            rawId: bufferToBase64Url(assertion.rawId),
                             response: {
-                                clientDataJSON: Array.from(new Uint8Array(assertion.response.clientDataJSON)),
-                                authenticatorData: Array.from(new Uint8Array(assertion.response.authenticatorData)),
-                                signature: Array.from(new Uint8Array(assertion.response.signature)),
-                                userHandle: assertion.response.userHandle ? Array.from(new Uint8Array(assertion.response.userHandle)) : null
+                                clientDataJSON: bufferToBase64Url(assertion.response.clientDataJSON),
+                                authenticatorData: bufferToBase64Url(assertion.response.authenticatorData),
+                                signature: bufferToBase64Url(assertion.response.signature),
+                                userHandle: assertion.response.userHandle ? bufferToBase64Url(assertion.response.userHandle) : null
                             },
                             type: assertion.type
                         }
