@@ -46,6 +46,7 @@
         <div id="chatBox" class="chat-box"></div>
         <input type="text" id="messageInput" placeholder="Type your message..." style="width: 70%;">
         <button onclick="sendMessage()">Send</button>
+        <button onclick="startPushEnrollment()" style="background: #28a745;">Enroll Push MFA</button>
         <button onclick="logout()" style="background: #dc3545;">Logout</button>
 
         <!-- Push enrollment QR overlay -->
@@ -357,7 +358,15 @@
 
         async function checkPushEnrollment() {
             const rt = getRefreshToken();
-            if (!rt) return;
+            console.log('[push] checkPushEnrollment — refresh_token present:', !!rt);
+            if (!rt) {
+                addMessageToChat(
+                    'Heads up: to enable push enrollment on this account, please log out and log in again — ' +
+                    'your current session was issued before we added refresh tokens.',
+                    'bot'
+                );
+                return;
+            }
             try {
                 const res = await fetch('/api/enroll-push/status', {
                     method: 'POST',
@@ -365,6 +374,7 @@
                     body: JSON.stringify({ refresh_token: rt })
                 });
                 const data = await res.json();
+                console.log('[push] status response:', res.status, data);
                 if (data.refresh_token) setRefreshToken(data.refresh_token);
                 if (res.ok && data.enrolled === false) {
                     needsPushEnrollment = true;
@@ -373,8 +383,10 @@
                         `Just say yes when you're ready.`;
                     addMessageToChat(suggestion, 'bot');
                     conversationHistory.push({ role: 'assistant', content: suggestion });
-                } else {
+                } else if (res.ok && data.enrolled === true) {
                     needsPushEnrollment = false;
+                } else {
+                    console.warn('[push] status failed:', data);
                 }
             } catch (e) {
                 console.warn('push enrollment status failed:', e);

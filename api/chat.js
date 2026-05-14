@@ -41,16 +41,21 @@ module.exports = async (req, res) => {
     `- user_id (Auth0 sub): ${userId}`,
     `- email: ${email || 'unknown'}`,
     "Answer questions about the user's profile using these facts.",
-    'For other questions, be brief and helpful.'
+    'For other questions, be brief and helpful.',
+    '',
+    'ENROLLMENT TRIGGER: The UI can enroll an Auth0 Guardian push authentication method for this user. ' +
+    'This is the ONLY way to produce a QR code for Guardian — you cannot show QR codes yourself, you cannot generate enrollment codes, you MUST NOT invent one. ' +
+    'If the user asks to enroll a push factor / MFA / Guardian / authenticator / QR code, ' +
+    'OR agrees to enrolling when asked (yes, sure, ok, let\'s do it, go ahead, etc.), ' +
+    'end your reply with the exact token [[ENROLL_PUSH]] on its own line and nothing after. ' +
+    'Do not mention the token itself to the user. Keep the reply short — one sentence confirming you\'re starting the enrollment is enough.'
   ];
 
   if (needsPushEnrollment) {
     promptLines.push(
       '',
-      'The user has NOT enrolled a push authentication method yet. ' +
-      'If the user agrees to enroll — explicitly or with a clear affirmative like "yes", "sure", "ok", "let\'s do it", "go ahead" — ' +
-      'end your reply with the exact token [[ENROLL_PUSH]] on its own line and nothing after. ' +
-      'Do not emit this token otherwise. Do not mention the token itself to the user.'
+      'SESSION NOTE: The user does not currently have a push factor enrolled. ' +
+      'If the conversation allows, proactively suggest enrolling one to protect sensitive transactions.'
     );
   }
 
