@@ -70,9 +70,14 @@ module.exports = async (req, res) => {
       userId
     });
   } catch (error) {
-    console.error('Groq error:', error.response?.data || error.message);
+    const detail = error.response?.data?.error?.message
+      || error.response?.data?.error
+      || error.response?.data
+      || error.message
+      || 'unknown';
+    console.error('Groq error status=', error.response?.status, 'detail=', detail);
     res.status(error.response?.status || 500).json({
-      error: error.response?.data?.error?.message || 'Chat service unavailable'
+      error: `Chat service error: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`
     });
   }
 };
