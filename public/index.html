@@ -17,8 +17,6 @@
     </script>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .container { display: none; }
-        .container.active { display: block; }
         .chat-box { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 10px; margin: 10px 0; }
         .message { margin: 10px 0; padding: 8px; border-radius: 5px; }
         .user { background: #e3f2fd; text-align: right; }
@@ -26,50 +24,56 @@
         input, button { padding: 10px; margin: 5px; }
         button { background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
         button:hover { background: #0056b3; }
+        button:disabled { background: #b0b0b0; cursor: not-allowed; }
         .error { color: red; margin: 10px 0; }
+        .auth-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; margin-bottom: 10px; }
+        .auth-bar .spacer { flex: 1; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <h1>AI Chatbot with Passkey Authentication</h1>
-    
-    <!-- Login Container -->
-    <div id="loginContainer" class="container active">
-        <h2>Welcome</h2>
-        <button onclick="signup()">Sign Up with Passkey</button>
-        <button onclick="login()">Login with Passkey</button>
-        <div id="authError" class="error"></div>
+
+    <!-- Auth bar -->
+    <div class="auth-bar">
+        <div id="signedOutControls">
+            <input type="email" id="emailInput" placeholder="email@example.com" style="width:220px;">
+            <button onclick="signup()">Sign Up with Passkey</button>
+            <button onclick="login()">Log In with Passkey</button>
+        </div>
+        <div id="signedInControls" class="hidden">
+            <span id="userInfo"></span>
+            <button onclick="logout()" style="background: #dc3545;">Logout</button>
+        </div>
+    </div>
+    <div id="authError" class="error"></div>
+
+    <!-- Chat (always visible) -->
+    <div id="chatBox" class="chat-box"></div>
+    <input type="text" id="messageInput" placeholder="Type your message..." style="width: 70%;">
+    <button onclick="sendMessage()">Send</button>
+    <button id="btnEnrollPush" onclick="startPushEnrollment()" style="background: #28a745;" class="hidden">Enroll Push MFA</button>
+    <button id="btnAddBeneficiary" onclick="manualAddBeneficiary()" class="hidden">Add Beneficiary (CIBA)</button>
+
+    <!-- CIBA transaction approval panel -->
+    <div id="cibaPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #007bff; border-radius:8px; background:#eef4ff;">
+        <h3 style="margin:0 0 8px 0;">Transaction approval pending</h3>
+        <p id="cibaMessage" style="margin:4px 0;"></p>
+        <p id="cibaStatus" style="margin:4px 0; font-weight:bold;">Check your phone and approve the push…</p>
+        <button id="cibaCancel" onclick="cancelCiba()" style="background:#6c757d;">Cancel</button>
     </div>
 
-    <!-- Chat Container -->
-    <div id="chatContainer" class="container">
-        <div id="userInfo"></div>
-        <div id="chatBox" class="chat-box"></div>
-        <input type="text" id="messageInput" placeholder="Type your message..." style="width: 70%;">
-        <button onclick="sendMessage()">Send</button>
-        <button onclick="startPushEnrollment()" style="background: #28a745;">Enroll Push MFA</button>
-        <button onclick="manualAddBeneficiary()" style="background: #007bff;">Add Beneficiary (CIBA)</button>
-        <button onclick="logout()" style="background: #dc3545;">Logout</button>
-
-        <!-- CIBA transaction approval panel -->
-        <div id="cibaPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #007bff; border-radius:8px; background:#eef4ff;">
-            <h3 style="margin:0 0 8px 0;">Transaction approval pending</h3>
-            <p id="cibaMessage" style="margin:4px 0;"></p>
-            <p id="cibaStatus" style="margin:4px 0; font-weight:bold;">Check your phone and approve the push…</p>
-            <button id="cibaCancel" onclick="cancelCiba()" style="background:#6c757d;">Cancel</button>
-        </div>
-
-        <!-- Push enrollment QR overlay -->
-        <div id="enrollPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #ccc; border-radius:8px; background:#fafafa;">
-            <h3 style="margin:0 0 8px 0;">Enroll push notifications</h3>
-            <p style="margin:4px 0;">Open the <strong>Auth0 Guardian</strong> app on your phone and scan this code.</p>
-            <div id="enrollQr" style="display:block; margin:12px 0; width:240px; height:240px;"></div>
-            <p style="margin:4px 0; font-size:12px; color:#666;">
-                Manual code: <code id="enrollManual"></code>
-            </p>
-            <p id="enrollStatus" style="margin:4px 0; font-weight:bold;">Waiting for you to scan…</p>
-            <button id="enrollScanned" onclick="confirmScan()" style="background:#28a745;">I've scanned — send confirmation push</button>
-            <button id="enrollCancel" onclick="cancelEnrollment()" style="background:#6c757d;">Cancel</button>
-        </div>
+    <!-- Push enrollment QR overlay -->
+    <div id="enrollPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #ccc; border-radius:8px; background:#fafafa;">
+        <h3 style="margin:0 0 8px 0;">Enroll push notifications</h3>
+        <p style="margin:4px 0;">Open the <strong>Auth0 Guardian</strong> app on your phone and scan this code.</p>
+        <div id="enrollQr" style="display:block; margin:12px 0; width:240px; height:240px;"></div>
+        <p style="margin:4px 0; font-size:12px; color:#666;">
+            Manual code: <code id="enrollManual"></code>
+        </p>
+        <p id="enrollStatus" style="margin:4px 0; font-weight:bold;">Waiting for you to scan…</p>
+        <button id="enrollScanned" onclick="confirmScan()" style="background:#28a745;">I've scanned — send confirmation push</button>
+        <button id="enrollCancel" onclick="cancelEnrollment()" style="background:#6c757d;">Cancel</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -161,12 +165,28 @@
         }
         
         // Sign up with passkey
+        function readEmailInput() {
+            const el = document.getElementById('emailInput');
+            const v = (el?.value || '').trim();
+            if (!v) {
+                showError('Enter your email above first.');
+                el?.focus();
+                return null;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+                showError('That does not look like a valid email.');
+                el?.focus();
+                return null;
+            }
+            return v;
+        }
+
         window.signup = async function() {
             try {
                 clearError();
                 console.log('Starting signup...');
-                
-                const email = prompt('Enter your email:');
+
+                const email = readEmailInput();
                 if (!email) return;
                 
                 const challengeResponse = await fetch('/api/passkey-signup-challenge', {
@@ -222,8 +242,8 @@
                 }
 
                 applySession(signupData, email);
-                showChatInterface();
-                
+                enterSignedIn();
+
             } catch (error) {
                 showError('Signup failed: ' + error.message);
             }
@@ -234,8 +254,8 @@
             try {
                 clearError();
                 console.log('Starting login...');
-                
-                const email = prompt('Enter your email:');
+
+                const email = readEmailInput();
                 if (!email) return;
                 
                 const challengeResponse = await fetch('/api/passkey-login-challenge', {
@@ -288,17 +308,17 @@
                 }
 
                 applySession(loginData, email);
-                showChatInterface();
-                
+                enterSignedIn();
+
             } catch (error) {
                 showError('Login failed: ' + error.message);
             }
         };
-        
+
         // Logout
         window.logout = function() {
             clearSession();
-            showLoginInterface();
+            enterSignedOut();
         };
         
         // Send message
@@ -312,12 +332,11 @@
 
             try {
                 const token = localStorage.getItem('id_token');
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
                 const response = await fetch('/api/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers,
                     body: JSON.stringify({
                         message: message,
                         email: currentUser && currentUser.email,
@@ -367,20 +386,29 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
         
-        function showChatInterface() {
-            document.getElementById('loginContainer').classList.remove('active');
-            document.getElementById('chatContainer').classList.add('active');
-            document.getElementById('userInfo').innerHTML = `<p>Welcome, ${currentUser.email}!</p>`;
-            document.getElementById('enrollPanel').style.display = 'none';
+        function updateAuthUi() {
+            const signedIn = !!currentUser;
+            document.getElementById('signedOutControls').classList.toggle('hidden', signedIn);
+            document.getElementById('signedInControls').classList.toggle('hidden', !signedIn);
+            document.getElementById('btnEnrollPush').classList.toggle('hidden', !signedIn);
+            document.getElementById('btnAddBeneficiary').classList.toggle('hidden', !signedIn);
+            document.getElementById('userInfo').textContent = signedIn
+                ? `Signed in as ${currentUser.email || currentUser.sub || 'user'}`
+                : '';
+            if (!signedIn) {
+                document.getElementById('enrollPanel').style.display = 'none';
+                document.getElementById('cibaPanel').style.display = 'none';
+            }
+        }
+
+        function enterSignedIn() {
+            updateAuthUi();
             checkPushEnrollment();
         }
 
-        function showLoginInterface() {
-            document.getElementById('chatContainer').classList.remove('active');
-            document.getElementById('loginContainer').classList.add('active');
+        function enterSignedOut() {
+            updateAuthUi();
             document.getElementById('chatBox').innerHTML = '';
-            document.getElementById('enrollPanel').style.display = 'none';
-            document.getElementById('cibaPanel').style.display = 'none';
         }
 
         async function checkPushEnrollment() {
@@ -708,12 +736,16 @@
                 if (claims && claims.exp && claims.exp * 1000 > Date.now()) {
                     currentUser = { sub: claims.sub || null, email: claims.email || null };
                     conversationHistory = [];
-                    showChatInterface();
+                    enterSignedIn();
                 } else {
                     clearSession();
+                    enterSignedOut();
                 }
             } else if (accessToken) {
                 clearSession();
+                enterSignedOut();
+            } else {
+                enterSignedOut();
             }
         });
         
