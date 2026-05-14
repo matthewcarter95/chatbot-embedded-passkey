@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
       'POST',
       `/authentication-methods/${encodeURIComponent(id)}/verify`,
       accessToken,
-      { type: 'push-notification', auth_session }
+      { auth_session }
     );
 
     if (verify.status === 200 || verify.status === 201 || verify.status === 202 || verify.status === 204) {
