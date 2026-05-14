@@ -60,7 +60,7 @@ module.exports = async (req, res) => {
       temperature: 0.3
     }, {
       headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${(process.env.GROQ_API_KEY || '').trim()}`,
         'Content-Type': 'application/json'
       }
     });
