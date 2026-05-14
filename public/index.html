@@ -53,8 +53,40 @@
         console.log('Loading app functions...');
         
         let currentUser = null;
+        let conversationHistory = [];
         const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
         const CLIENT_ID = window.AUTH0_CONFIG.clientId;
+
+        function decodeJwt(token) {
+            try {
+                const [, payload] = token.split('.');
+                const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+                const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+                return JSON.parse(decodeURIComponent(escape(atob(padded))));
+            } catch {
+                return {};
+            }
+        }
+
+        function applySession(tokenResponse, fallbackEmail) {
+            const access = tokenResponse.access_token;
+            const id = tokenResponse.id_token;
+            const claims = id ? decodeJwt(id) : {};
+            localStorage.setItem('access_token', access);
+            if (id) localStorage.setItem('id_token', id);
+            currentUser = {
+                sub: claims.sub || null,
+                email: claims.email || fallbackEmail || null
+            };
+            conversationHistory = [];
+        }
+
+        function clearSession() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('id_token');
+            currentUser = null;
+            conversationHistory = [];
+        }
         
         function bufferToBase64Url(buffer) {
             const bytes = new Uint8Array(buffer);
@@ -140,9 +172,8 @@
                 if (!signupResponse.ok) {
                     throw new Error(signupData.error_description || 'Signup failed');
                 }
-                
-                localStorage.setItem('access_token', signupData.access_token);
-                currentUser = { email: email, sub: signupData.user_id };
+
+                applySession(signupData, email);
                 showChatInterface();
                 
             } catch (error) {
@@ -207,9 +238,8 @@
                 if (!loginResponse.ok) {
                     throw new Error(loginData.error_description || 'Login failed');
                 }
-                
-                localStorage.setItem('access_token', loginData.access_token);
-                currentUser = { email: email, sub: loginData.user_id };
+
+                applySession(loginData, email);
                 showChatInterface();
                 
             } catch (error) {
@@ -219,8 +249,7 @@
         
         // Logout
         window.logout = function() {
-            localStorage.removeItem('access_token');
-            currentUser = null;
+            clearSession();
             showLoginInterface();
         };
         
@@ -229,10 +258,10 @@
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             if (!message) return;
-            
+
             addMessageToChat(message, 'user');
             input.value = '';
-            
+
             try {
                 const token = localStorage.getItem('access_token');
                 const response = await fetch('/api/chat', {
@@ -241,11 +270,21 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ message: message, userId: currentUser.sub })
+                    body: JSON.stringify({
+                        message: message,
+                        email: currentUser && currentUser.email,
+                        history: conversationHistory
+                    })
                 });
-                
+
                 const data = await response.json();
-                addMessageToChat(response.ok ? data.response : 'Error: ' + data.error, 'bot');
+                if (response.ok) {
+                    addMessageToChat(data.response, 'bot');
+                    conversationHistory.push({ role: 'user', content: message });
+                    conversationHistory.push({ role: 'assistant', content: data.response });
+                } else {
+                    addMessageToChat('Error: ' + (data.error || response.statusText), 'bot');
+                }
             } catch (error) {
                 addMessageToChat('Error: ' + error.message, 'bot');
             }
@@ -289,10 +328,19 @@
                 if (e.key === 'Enter') sendMessage();
             });
             
-            const token = localStorage.getItem('access_token');
-            if (token) {
-                currentUser = { email: 'user@example.com', sub: 'auth0|user' };
-                showChatInterface();
+            const accessToken = localStorage.getItem('access_token');
+            const idToken = localStorage.getItem('id_token');
+            if (accessToken && idToken) {
+                const claims = decodeJwt(idToken);
+                if (claims && claims.exp && claims.exp * 1000 > Date.now()) {
+                    currentUser = { sub: claims.sub || null, email: claims.email || null };
+                    conversationHistory = [];
+                    showChatInterface();
+                } else {
+                    clearSession();
+                }
+            } else if (accessToken) {
+                clearSession();
             }
         });
         

@@ -10,7 +10,9 @@ module.exports = async (req, res) => {
       grant_type: 'urn:okta:params:oauth:grant-type:webauthn',
       client_id: req.body.client_id,
       auth_session: req.body.auth_session,
-      authn_response: req.body.credential
+      authn_response: req.body.credential,
+      scope: 'openid profile email',
+      audience: 'https://chatterbox-api.demo-connect.us'
     };
 
     const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, requestBody, {
