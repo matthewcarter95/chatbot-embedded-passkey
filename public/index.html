@@ -461,8 +461,8 @@
         function pollEnrollment() {
             const startedAt = Date.now();
             const TIMEOUT_MS = 3 * 60 * 1000;
-            let delay = 5000;
-            const MAX_DELAY = 20000;
+            let delay = 8000;
+            const MAX_DELAY = 30000;
 
             if (enrollmentPollTimer) { clearTimeout(enrollmentPollTimer); enrollmentPollTimer = null; }
 
@@ -481,15 +481,14 @@
                             'Authorization': `Bearer ${at}`
                         },
                         body: JSON.stringify({
-                            id: pendingEnrollment.id,
-                            auth_session: pendingEnrollment.auth_session
+                            id: pendingEnrollment.id
                         })
                     });
                     if (res.status === 429) {
                         delay = Math.min(delay * 2, MAX_DELAY);
                         document.getElementById('enrollStatus').textContent = 'Waiting… (rate-limited, backing off)';
                     } else {
-                        delay = 5000;
+                        delay = 8000;
                         const data = await res.json();
                         if (data.confirmed) {
                             pendingEnrollment = null;

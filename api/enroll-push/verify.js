@@ -6,43 +6,31 @@ module.exports = async (req, res) => {
   }
 
   const accessToken = readBearer(req);
-  const { id, auth_session } = req.body || {};
+  const { id } = req.body || {};
   if (!accessToken) {
     return res.status(401).json({ error: 'Missing bearer token' });
   }
-  if (!id || !auth_session) {
-    return res.status(400).json({ error: 'Missing id or auth_session' });
+  if (!id) {
+    return res.status(400).json({ error: 'Missing id' });
   }
 
   try {
-    const verify = await callMyAccount(
-      'POST',
-      `/authentication-methods/${encodeURIComponent(id)}/verify`,
-      accessToken,
-      { auth_session }
-    );
-
-    if (verify.status === 200 || verify.status === 204) {
-      return res.json({ confirmed: true });
-    }
-
-    if (verify.status === 400 || verify.status === 409) {
-      const list = await callMyAccount('GET', '/authentication-methods', accessToken);
-      const methods = Array.isArray(list.data) ? list.data : (list.data?.authentication_methods || []);
-      const method = methods.find(m => m.id === id);
-      return res.json({
-        confirmed: !!method?.confirmed,
-        detail: verify.data
+    const list = await callMyAccount('GET', '/authentication-methods', accessToken);
+    if (list.status >= 400) {
+      return res.status(list.status).json({
+        error: 'List failed',
+        detail: list.data,
+        token_claims: list.tokenClaims || null
       });
     }
-
-    res.status(verify.status).json({
-      error: 'Verify failed',
-      detail: verify.data,
-      token_claims: verify.tokenClaims || null
+    const methods = Array.isArray(list.data) ? list.data : (list.data?.authentication_methods || []);
+    const method = methods.find(m => m.id === id);
+    return res.json({
+      confirmed: !!method?.confirmed,
+      method: method || null
     });
   } catch (error) {
     console.error('enroll-push/verify error:', error.message);
-    res.status(500).json({ error: 'Enrollment verify failed', detail: error.message });
+    res.status(500).json({ error: 'Verify failed', detail: error.message });
   }
 };
