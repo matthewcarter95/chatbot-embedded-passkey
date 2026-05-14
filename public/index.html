@@ -297,7 +297,7 @@
             input.value = '';
 
             try {
-                const token = localStorage.getItem('access_token');
+                const token = localStorage.getItem('id_token');
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
@@ -357,12 +357,12 @@
         }
 
         async function checkPushEnrollment() {
-            const rt = getRefreshToken();
-            console.log('[push] checkPushEnrollment — refresh_token present:', !!rt);
-            if (!rt) {
+            const at = localStorage.getItem('access_token');
+            console.log('[push] checkPushEnrollment — access_token present:', !!at);
+            if (!at) {
                 addMessageToChat(
                     'Heads up: to enable push enrollment on this account, please log out and log in again — ' +
-                    'your current session was issued before we added refresh tokens.',
+                    'your current session predates the MyAccount audience change.',
                     'bot'
                 );
                 return;
@@ -370,12 +370,13 @@
             try {
                 const res = await fetch('/api/enroll-push/status', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh_token: rt })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${at}`
+                    }
                 });
                 const data = await res.json();
                 console.log('[push] status response:', res.status, data);
-                if (data.refresh_token) setRefreshToken(data.refresh_token);
                 if (res.ok && data.enrolled === false) {
                     needsPushEnrollment = true;
                     const suggestion = `Hi ${currentUser.email || 'there'} — I notice you don't have push notifications enabled yet. ` +
@@ -394,19 +395,20 @@
         }
 
         async function startPushEnrollment() {
-            const rt = getRefreshToken();
-            if (!rt) {
-                addMessageToChat('Cannot start enrollment: missing refresh token. Try logging out and back in.', 'bot');
+            const at = localStorage.getItem('access_token');
+            if (!at) {
+                addMessageToChat('Cannot start enrollment: missing access token. Try logging out and back in.', 'bot');
                 return;
             }
             try {
                 const res = await fetch('/api/enroll-push/start', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh_token: rt })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${at}`
+                    }
                 });
                 const data = await res.json();
-                if (data.refresh_token) setRefreshToken(data.refresh_token);
                 if (!res.ok) {
                     addMessageToChat('Enrollment failed: ' + (data.error || res.statusText) + ' ' + (data.detail ? JSON.stringify(data.detail) : ''), 'bot');
                     return;
@@ -460,19 +462,20 @@
                     document.getElementById('enrollStatus').textContent = 'Timed out — try again.';
                     return;
                 }
-                const rt = getRefreshToken();
+                const at = localStorage.getItem('access_token');
                 try {
                     const res = await fetch('/api/enroll-push/verify', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${at}`
+                        },
                         body: JSON.stringify({
-                            refresh_token: rt,
                             id: pendingEnrollment.id,
                             auth_session: pendingEnrollment.auth_session
                         })
                     });
                     const data = await res.json();
-                    if (data.refresh_token) setRefreshToken(data.refresh_token);
                     if (data.confirmed) {
                         clearInterval(enrollmentPollTimer);
                         enrollmentPollTimer = null;

@@ -2,7 +2,7 @@ const axios = require('axios');
 const { jwtVerify, createRemoteJWKSet } = require('jose');
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
-const API_AUDIENCE = 'https://chatterbox-api.demo-connect.us';
+const CLIENT_ID = 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W';
 const JWKS = createRemoteJWKSet(new URL(`https://${AUTH0_DOMAIN}/.well-known/jwks.json`));
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
   try {
     ({ payload } = await jwtVerify(token, JWKS, {
       issuer: `https://${AUTH0_DOMAIN}/`,
-      audience: API_AUDIENCE
+      audience: CLIENT_ID
     }));
   } catch (err) {
     return res.status(401).json({ error: `Invalid token: ${err.message}` });

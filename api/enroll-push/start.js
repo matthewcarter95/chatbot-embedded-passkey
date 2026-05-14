@@ -1,22 +1,17 @@
-const { exchangeRefreshToken, callMyAccount, readRefreshToken } = require('../_myaccount');
+const { callMyAccount, readBearer } = require('../_myaccount');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const refreshToken = readRefreshToken(req);
-  if (!refreshToken) {
-    return res.status(400).json({ error: 'Missing refresh_token' });
+  const accessToken = readBearer(req);
+  if (!accessToken) {
+    return res.status(401).json({ error: 'Missing bearer token' });
   }
 
   try {
-    const { access_token, refresh_token } = await exchangeRefreshToken(
-      refreshToken,
-      'create:me:authentication_methods'
-    );
-
-    const create = await callMyAccount('POST', '/authentication-methods', access_token, {
+    const create = await callMyAccount('POST', '/authentication-methods', accessToken, {
       type: 'push-notification'
     });
 
@@ -24,8 +19,7 @@ module.exports = async (req, res) => {
       return res.status(create.status).json({
         error: 'MyAccount enrollment failed',
         detail: create.data,
-        token_claims: create.tokenClaims || null,
-        refresh_token
+        token_claims: create.tokenClaims || null
       });
     }
 
@@ -33,15 +27,10 @@ module.exports = async (req, res) => {
       id: create.data.id,
       auth_session: create.data.auth_session,
       barcode_uri: create.data.barcode_uri,
-      manual_input_code: create.data.manual_input_code,
-      refresh_token
+      manual_input_code: create.data.manual_input_code
     });
   } catch (error) {
-    const detail = error.response?.data || error.message;
-    console.error('enroll-push/start error:', detail);
-    res.status(error.response?.status || 500).json({
-      error: 'Enrollment start failed',
-      detail: typeof detail === 'string' ? detail : JSON.stringify(detail)
-    });
+    console.error('enroll-push/start error:', error.message);
+    res.status(500).json({ error: 'Enrollment start failed', detail: error.message });
   }
 };

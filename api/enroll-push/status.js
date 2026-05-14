@@ -1,28 +1,22 @@
-const { exchangeRefreshToken, callMyAccount, readRefreshToken } = require('../_myaccount');
+const { callMyAccount, readBearer } = require('../_myaccount');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const refreshToken = readRefreshToken(req);
-  if (!refreshToken) {
-    return res.status(400).json({ error: 'Missing refresh_token' });
+  const accessToken = readBearer(req);
+  if (!accessToken) {
+    return res.status(401).json({ error: 'Missing bearer token' });
   }
 
   try {
-    const { access_token, refresh_token } = await exchangeRefreshToken(
-      refreshToken,
-      'read:me:authentication_methods'
-    );
-
-    const list = await callMyAccount('GET', '/authentication-methods', access_token);
+    const list = await callMyAccount('GET', '/authentication-methods', accessToken);
     if (list.status >= 400) {
       return res.status(list.status).json({
         error: 'MyAccount list failed',
         detail: list.data,
-        token_claims: list.tokenClaims || null,
-        refresh_token
+        token_claims: list.tokenClaims || null
       });
     }
 
@@ -31,15 +25,10 @@ module.exports = async (req, res) => {
 
     res.json({
       enrolled: !!push,
-      push_method: push || null,
-      refresh_token
+      push_method: push || null
     });
   } catch (error) {
-    const detail = error.response?.data || error.message;
-    console.error('enroll-push/status error:', detail);
-    res.status(error.response?.status || 500).json({
-      error: 'Status check failed',
-      detail: typeof detail === 'string' ? detail : JSON.stringify(detail)
-    });
+    console.error('enroll-push/status error:', error.message);
+    res.status(500).json({ error: 'Status check failed', detail: error.message });
   }
 };
