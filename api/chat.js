@@ -7,9 +7,9 @@ module.exports = async (req, res) => {
 
   try {
     const { message, userId } = req.body;
-    
-    if (!message || !userId) {
-      return res.status(400).json({ error: 'Message and userId required' });
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message required' });
     }
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
