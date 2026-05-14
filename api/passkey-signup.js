@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
       auth_session: req.body.auth_session,
       authn_response: req.body.credential,
       scope: 'openid profile email create:me:authentication_methods read:me:authentication_methods',
-      audience: 'https://agentic-ai-rag.cic-demo-platform.auth0app.com/me/'
+      audience: `https://${process.env.AUTH0_DOMAIN}/me/`
     };
 
     const response = await axios.post(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, requestBody, {
