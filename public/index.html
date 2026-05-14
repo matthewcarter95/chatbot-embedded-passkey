@@ -47,13 +47,30 @@
         <input type="text" id="messageInput" placeholder="Type your message..." style="width: 70%;">
         <button onclick="sendMessage()">Send</button>
         <button onclick="logout()" style="background: #dc3545;">Logout</button>
+
+        <!-- Push enrollment QR overlay -->
+        <div id="enrollPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #ccc; border-radius:8px; background:#fafafa;">
+            <h3 style="margin:0 0 8px 0;">Enroll push notifications</h3>
+            <p style="margin:4px 0;">Open the <strong>Auth0 Guardian</strong> app on your phone and scan this code.</p>
+            <canvas id="enrollQr" style="display:block; margin:12px 0;"></canvas>
+            <p style="margin:4px 0; font-size:12px; color:#666;">
+                Manual code: <code id="enrollManual"></code>
+            </p>
+            <p id="enrollStatus" style="margin:4px 0; font-weight:bold;">Waiting for you to scan…</p>
+            <button id="enrollCancel" onclick="cancelEnrollment()" style="background:#6c757d;">Cancel</button>
+        </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
     <script>
         console.log('Loading app functions...');
         
         let currentUser = null;
         let conversationHistory = [];
+        let needsPushEnrollment = false;
+        let pendingEnrollment = null; // { id, auth_session }
+        let enrollmentPollTimer = null;
         const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
         const CLIENT_ID = window.AUTH0_CONFIG.clientId;
 
@@ -68,24 +85,40 @@
             }
         }
 
+        function getRefreshToken() {
+            return localStorage.getItem('refresh_token') || '';
+        }
+
+        function setRefreshToken(rt) {
+            if (rt) localStorage.setItem('refresh_token', rt);
+        }
+
         function applySession(tokenResponse, fallbackEmail) {
             const access = tokenResponse.access_token;
             const id = tokenResponse.id_token;
+            const refresh = tokenResponse.refresh_token;
             const claims = id ? decodeJwt(id) : {};
             localStorage.setItem('access_token', access);
             if (id) localStorage.setItem('id_token', id);
+            if (refresh) localStorage.setItem('refresh_token', refresh);
             currentUser = {
                 sub: claims.sub || null,
                 email: claims.email || fallbackEmail || null
             };
             conversationHistory = [];
+            needsPushEnrollment = false;
+            pendingEnrollment = null;
         }
 
         function clearSession() {
             localStorage.removeItem('access_token');
             localStorage.removeItem('id_token');
+            localStorage.removeItem('refresh_token');
             currentUser = null;
             conversationHistory = [];
+            needsPushEnrollment = false;
+            pendingEnrollment = null;
+            if (enrollmentPollTimer) { clearInterval(enrollmentPollTimer); enrollmentPollTimer = null; }
         }
         
         function bufferToBase64Url(buffer) {
@@ -273,15 +306,22 @@
                     body: JSON.stringify({
                         message: message,
                         email: currentUser && currentUser.email,
-                        history: conversationHistory
+                        history: conversationHistory,
+                        needsPushEnrollment: needsPushEnrollment
                     })
                 });
 
                 const data = await response.json();
                 if (response.ok) {
-                    addMessageToChat(data.response, 'bot');
+                    const raw = data.response || '';
+                    const enrollSignal = /\[\[ENROLL_PUSH\]\]/.test(raw);
+                    const visible = raw.replace(/\s*\[\[ENROLL_PUSH\]\]\s*$/m, '').trim();
+                    if (visible) addMessageToChat(visible, 'bot');
                     conversationHistory.push({ role: 'user', content: message });
-                    conversationHistory.push({ role: 'assistant', content: data.response });
+                    conversationHistory.push({ role: 'assistant', content: visible });
+                    if (enrollSignal && needsPushEnrollment) {
+                        startPushEnrollment();
+                    }
                 } else {
                     addMessageToChat('Error: ' + (data.error || response.statusText), 'bot');
                 }
@@ -304,12 +344,138 @@
             document.getElementById('loginContainer').classList.remove('active');
             document.getElementById('chatContainer').classList.add('active');
             document.getElementById('userInfo').innerHTML = `<p>Welcome, ${currentUser.email}!</p>`;
+            document.getElementById('enrollPanel').style.display = 'none';
+            checkPushEnrollment();
         }
-        
+
         function showLoginInterface() {
             document.getElementById('chatContainer').classList.remove('active');
             document.getElementById('loginContainer').classList.add('active');
             document.getElementById('chatBox').innerHTML = '';
+            document.getElementById('enrollPanel').style.display = 'none';
+        }
+
+        async function checkPushEnrollment() {
+            const rt = getRefreshToken();
+            if (!rt) return;
+            try {
+                const res = await fetch('/api/enroll-push/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: rt })
+                });
+                const data = await res.json();
+                if (data.refresh_token) setRefreshToken(data.refresh_token);
+                if (res.ok && data.enrolled === false) {
+                    needsPushEnrollment = true;
+                    const suggestion = `Hi ${currentUser.email || 'there'} — I notice you don't have push notifications enabled yet. ` +
+                        `To help us protect important transactions like changing beneficiaries, would you like to enroll your phone now? ` +
+                        `Just say yes when you're ready.`;
+                    addMessageToChat(suggestion, 'bot');
+                    conversationHistory.push({ role: 'assistant', content: suggestion });
+                } else {
+                    needsPushEnrollment = false;
+                }
+            } catch (e) {
+                console.warn('push enrollment status failed:', e);
+            }
+        }
+
+        async function startPushEnrollment() {
+            const rt = getRefreshToken();
+            if (!rt) {
+                addMessageToChat('Cannot start enrollment: missing refresh token. Try logging out and back in.', 'bot');
+                return;
+            }
+            try {
+                const res = await fetch('/api/enroll-push/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: rt })
+                });
+                const data = await res.json();
+                if (data.refresh_token) setRefreshToken(data.refresh_token);
+                if (!res.ok) {
+                    addMessageToChat('Enrollment failed: ' + (data.error || res.statusText) + ' ' + (data.detail ? JSON.stringify(data.detail) : ''), 'bot');
+                    return;
+                }
+                pendingEnrollment = { id: data.id, auth_session: data.auth_session };
+                showEnrollmentQr(data.barcode_uri, data.manual_input_code);
+                pollEnrollment();
+            } catch (e) {
+                addMessageToChat('Enrollment error: ' + e.message, 'bot');
+            }
+        }
+
+        function showEnrollmentQr(barcodeUri, manualCode) {
+            const panel = document.getElementById('enrollPanel');
+            const canvas = document.getElementById('enrollQr');
+            const manualEl = document.getElementById('enrollManual');
+            const statusEl = document.getElementById('enrollStatus');
+            statusEl.textContent = 'Waiting for you to scan…';
+            manualEl.textContent = manualCode || '(n/a)';
+            panel.style.display = 'block';
+            if (window.QRCode && canvas) {
+                window.QRCode.toCanvas(canvas, barcodeUri, { width: 240, margin: 1 }, function (err) {
+                    if (err) console.error('QR render error:', err);
+                });
+            } else {
+                canvas.replaceWith(Object.assign(document.createElement('p'), {
+                    textContent: 'QR library failed to load. Use the manual code in the Guardian app.'
+                }));
+            }
+        }
+
+        function hideEnrollmentPanel() {
+            document.getElementById('enrollPanel').style.display = 'none';
+            if (enrollmentPollTimer) { clearInterval(enrollmentPollTimer); enrollmentPollTimer = null; }
+        }
+
+        window.cancelEnrollment = function() {
+            pendingEnrollment = null;
+            hideEnrollmentPanel();
+            addMessageToChat('Enrollment cancelled. You can ask me again later.', 'bot');
+        };
+
+        function pollEnrollment() {
+            const startedAt = Date.now();
+            const TIMEOUT_MS = 3 * 60 * 1000;
+            if (enrollmentPollTimer) clearInterval(enrollmentPollTimer);
+            enrollmentPollTimer = setInterval(async () => {
+                if (!pendingEnrollment) { clearInterval(enrollmentPollTimer); return; }
+                if (Date.now() - startedAt > TIMEOUT_MS) {
+                    clearInterval(enrollmentPollTimer);
+                    document.getElementById('enrollStatus').textContent = 'Timed out — try again.';
+                    return;
+                }
+                const rt = getRefreshToken();
+                try {
+                    const res = await fetch('/api/enroll-push/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            refresh_token: rt,
+                            id: pendingEnrollment.id,
+                            auth_session: pendingEnrollment.auth_session
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.refresh_token) setRefreshToken(data.refresh_token);
+                    if (data.confirmed) {
+                        clearInterval(enrollmentPollTimer);
+                        enrollmentPollTimer = null;
+                        pendingEnrollment = null;
+                        needsPushEnrollment = false;
+                        document.getElementById('enrollStatus').textContent = 'Enrolled!';
+                        setTimeout(hideEnrollmentPanel, 1500);
+                        const msg = 'Push enrollment complete. You can now approve sensitive transactions from your phone.';
+                        addMessageToChat(msg, 'bot');
+                        conversationHistory.push({ role: 'assistant', content: msg });
+                    }
+                } catch (e) {
+                    console.warn('poll error:', e);
+                }
+            }, 2500);
         }
         
         function showError(message) {

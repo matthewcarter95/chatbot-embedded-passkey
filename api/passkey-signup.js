@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
       client_id: req.body.client_id,
       auth_session: req.body.auth_session,
       authn_response: req.body.credential,
-      scope: 'openid profile email',
+      scope: 'openid profile email offline_access',
       audience: 'https://chatterbox-api.demo-connect.us'
     };
 

@@ -30,19 +30,31 @@ module.exports = async (req, res) => {
   }
 
   const userId = payload.sub;
-  const { message, email, history } = req.body || {};
+  const { message, email, history, needsPushEnrollment } = req.body || {};
   if (!message) {
     return res.status(400).json({ error: 'Message required' });
   }
 
-  const systemPrompt = [
+  const promptLines = [
     'You are a concise assistant inside a passkey-authenticated demo chatbot.',
     'The authenticated user is identified by:',
     `- user_id (Auth0 sub): ${userId}`,
     `- email: ${email || 'unknown'}`,
     "Answer questions about the user's profile using these facts.",
     'For other questions, be brief and helpful.'
-  ].join('\n');
+  ];
+
+  if (needsPushEnrollment) {
+    promptLines.push(
+      '',
+      'The user has NOT enrolled a push authentication method yet. ' +
+      'If the user agrees to enroll — explicitly or with a clear affirmative like "yes", "sure", "ok", "let\'s do it", "go ahead" — ' +
+      'end your reply with the exact token [[ENROLL_PUSH]] on its own line and nothing after. ' +
+      'Do not emit this token otherwise. Do not mention the token itself to the user.'
+    );
+  }
+
+  const systemPrompt = promptLines.join('\n');
 
   const priorTurns = Array.isArray(history)
     ? history.filter(m => m && typeof m.content === 'string' && (m.role === 'user' || m.role === 'assistant')).slice(-20)
