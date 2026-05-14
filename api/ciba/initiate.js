@@ -40,7 +40,8 @@ module.exports = async (req, res) => {
     sub: claims.sub
   });
 
-  const binding_message = `Add ${name} as ${percentage}% beneficiary`.slice(0, 64);
+  const safeName = name.replace(/[^A-Za-z0-9 +\-_.,:#]/g, ' ').replace(/\s+/g, ' ').trim();
+  const binding_message = `Add ${safeName} at ${percentage} percent`.slice(0, 64);
 
   const params = new URLSearchParams({
     client_id: (process.env.AUTH0_CIBA_CLIENT_ID || '').trim(),
