@@ -47,6 +47,7 @@
         <input type="text" id="messageInput" placeholder="Type your message..." style="width: 70%;">
         <button onclick="sendMessage()">Send</button>
         <button onclick="startPushEnrollment()" style="background: #28a745;">Enroll Push MFA</button>
+        <button onclick="manualAddBeneficiary()" style="background: #007bff;">Add Beneficiary (CIBA)</button>
         <button onclick="logout()" style="background: #dc3545;">Logout</button>
 
         <!-- CIBA transaction approval panel -->
@@ -481,6 +482,15 @@
             pendingEnrollment = null;
             hideEnrollmentPanel();
             addMessageToChat('Enrollment cancelled. You can ask me again later.', 'bot');
+        };
+
+        window.manualAddBeneficiary = function() {
+            const name = prompt('Beneficiary full legal name:');
+            if (!name) return;
+            const pctStr = prompt('Percentage (1-100):', '100');
+            const percentage = Math.max(1, Math.min(100, parseInt(pctStr, 10) || 0));
+            if (!percentage) return;
+            startCibaApproval({ name: name.trim(), percentage });
         };
 
         async function startCibaApproval(beneficiary) {
