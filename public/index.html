@@ -58,6 +58,7 @@
                 Manual code: <code id="enrollManual"></code>
             </p>
             <p id="enrollStatus" style="margin:4px 0; font-weight:bold;">Waiting for you to scan…</p>
+            <button id="enrollScanned" onclick="confirmScan()" style="background:#28a745;">I've scanned — send confirmation push</button>
             <button id="enrollCancel" onclick="cancelEnrollment()" style="background:#6c757d;">Cancel</button>
         </div>
     </div>
@@ -415,7 +416,6 @@
                 }
                 pendingEnrollment = { id: data.id, auth_session: data.auth_session };
                 showEnrollmentQr(data.barcode_uri, data.manual_input_code);
-                pollEnrollment();
             } catch (e) {
                 addMessageToChat('Enrollment error: ' + e.message, 'bot');
             }
@@ -458,6 +458,40 @@
             addMessageToChat('Enrollment cancelled. You can ask me again later.', 'bot');
         };
 
+        window.confirmScan = async function() {
+            if (!pendingEnrollment) return;
+            const at = localStorage.getItem('access_token');
+            const statusEl = document.getElementById('enrollStatus');
+            const scannedBtn = document.getElementById('enrollScanned');
+            statusEl.textContent = 'Sending confirmation push to your phone…';
+            if (scannedBtn) scannedBtn.disabled = true;
+            try {
+                const res = await fetch('/api/enroll-push/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${at}`
+                    },
+                    body: JSON.stringify({
+                        id: pendingEnrollment.id,
+                        auth_session: pendingEnrollment.auth_session
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    statusEl.textContent = 'Confirm push failed. Try re-enrolling.';
+                    addMessageToChat('Verify error: ' + (data.error || res.statusText) + ' ' + (data.detail ? JSON.stringify(data.detail) : ''), 'bot');
+                    if (scannedBtn) scannedBtn.disabled = false;
+                    return;
+                }
+                statusEl.textContent = 'Check your phone and approve the push…';
+                pollEnrollment();
+            } catch (e) {
+                statusEl.textContent = 'Network error during confirm. Try again.';
+                if (scannedBtn) scannedBtn.disabled = false;
+            }
+        };
+
         function pollEnrollment() {
             const startedAt = Date.now();
             const TIMEOUT_MS = 3 * 60 * 1000;
@@ -474,15 +508,12 @@
                 }
                 const at = localStorage.getItem('access_token');
                 try {
-                    const res = await fetch('/api/enroll-push/verify', {
+                    const res = await fetch('/api/enroll-push/status', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${at}`
-                        },
-                        body: JSON.stringify({
-                            id: pendingEnrollment.id
-                        })
+                        }
                     });
                     if (res.status === 429) {
                         delay = Math.min(delay * 2, MAX_DELAY);
@@ -490,7 +521,8 @@
                     } else {
                         delay = 8000;
                         const data = await res.json();
-                        if (data.confirmed) {
+                        const confirmed = !!data.enrolled || (data.push_method && data.push_method.id === pendingEnrollment.id);
+                        if (confirmed) {
                             pendingEnrollment = null;
                             needsPushEnrollment = false;
                             document.getElementById('enrollStatus').textContent = 'Enrolled!';

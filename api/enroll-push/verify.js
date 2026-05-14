@@ -6,31 +6,33 @@ module.exports = async (req, res) => {
   }
 
   const accessToken = readBearer(req);
-  const { id } = req.body || {};
+  const { id, auth_session } = req.body || {};
   if (!accessToken) {
     return res.status(401).json({ error: 'Missing bearer token' });
   }
-  if (!id) {
-    return res.status(400).json({ error: 'Missing id' });
+  if (!id || !auth_session) {
+    return res.status(400).json({ error: 'Missing id or auth_session' });
   }
 
   try {
-    const list = await callMyAccount('GET', '/authentication-methods', accessToken);
-    if (list.status >= 400) {
-      return res.status(list.status).json({
-        error: 'List failed',
-        detail: list.data,
-        token_claims: list.tokenClaims || null
-      });
+    const verify = await callMyAccount(
+      'POST',
+      `/authentication-methods/${encodeURIComponent(id)}/verify`,
+      accessToken,
+      { auth_session }
+    );
+
+    if (verify.status === 200 || verify.status === 201 || verify.status === 202 || verify.status === 204) {
+      return res.json({ ok: true, detail: verify.data });
     }
-    const methods = Array.isArray(list.data) ? list.data : (list.data?.authentication_methods || []);
-    const method = methods.find(m => m.id === id);
-    return res.json({
-      confirmed: !!method?.confirmed,
-      method: method || null
+
+    return res.status(verify.status).json({
+      error: 'Verify call failed',
+      detail: verify.data,
+      token_claims: verify.tokenClaims || null
     });
   } catch (error) {
     console.error('enroll-push/verify error:', error.message);
-    res.status(500).json({ error: 'Verify failed', detail: error.message });
+    res.status(500).json({ error: 'Verify call error', detail: error.message });
   }
 };
