@@ -56,6 +56,20 @@
     <button id="btnEnrollPush" onclick="startPushEnrollment()" style="background: #28a745;" class="hidden">Enroll Push MFA</button>
     <button id="btnAddBeneficiary" onclick="manualAddBeneficiary()" class="hidden">Add Beneficiary (CIBA)</button>
 
+    <!-- SMS verification modal (signup) -->
+    <div id="smsModalBackdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:white; padding:24px; border-radius:8px; max-width:400px; width:90%;">
+            <h3 style="margin-top:0;">Verify your phone</h3>
+            <p id="smsModalMsg" style="margin:6px 0;">We sent a 6-digit code by SMS to your number. Enter it below.</p>
+            <input type="text" id="smsCodeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" style="width:100%; box-sizing:border-box; padding:10px; font-size:18px; letter-spacing:4px; text-align:center;">
+            <p id="smsModalError" class="error" style="margin:6px 0; min-height:18px;"></p>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+                <button id="smsVerifyBtn" onclick="submitSmsCode()">Verify and continue</button>
+                <button onclick="cancelSms()" style="background:#6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- CIBA transaction approval panel -->
     <div id="cibaPanel" style="display:none; margin-top:16px; padding:16px; border:1px solid #007bff; border-radius:8px; background:#eef4ff;">
         <h3 style="margin:0 0 8px 0;">Transaction approval pending</h3>
@@ -184,6 +198,8 @@
             return compact.startsWith('+') ? compact : '+' + compact;
         }
 
+        let pendingSignupPhone = null;
+
         window.signup = async function() {
             try {
                 clearError();
@@ -192,13 +208,82 @@
                 const phone = readPhoneInput();
                 if (!phone) return;
 
+                // Step 1: send SMS to verify phone ownership
+                document.getElementById('smsModalError').textContent = '';
+                document.getElementById('smsCodeInput').value = '';
+                document.getElementById('smsModalMsg').textContent = `Sending a code to ${phone}…`;
+                document.getElementById('smsModalBackdrop').style.display = 'flex';
+                document.getElementById('smsVerifyBtn').disabled = true;
+
+                const startRes = await fetch('/api/sms/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: phone })
+                });
+                const startData = await startRes.json();
+                if (!startRes.ok) {
+                    document.getElementById('smsModalError').textContent =
+                        'Could not send SMS: ' + (startData.error || startRes.statusText) + ' ' + (startData.detail ? JSON.stringify(startData.detail) : '');
+                    return;
+                }
+                document.getElementById('smsModalMsg').textContent = `We sent a code by SMS to ${phone}. Enter it below.`;
+                document.getElementById('smsVerifyBtn').disabled = false;
+                document.getElementById('smsCodeInput').focus();
+                pendingSignupPhone = phone;
+            } catch (error) {
+                showError('Signup failed: ' + error.message);
+            }
+        };
+
+        window.cancelSms = function() {
+            document.getElementById('smsModalBackdrop').style.display = 'none';
+            pendingSignupPhone = null;
+        };
+
+        window.submitSmsCode = async function() {
+            const otp = (document.getElementById('smsCodeInput').value || '').trim();
+            const errEl = document.getElementById('smsModalError');
+            const btn = document.getElementById('smsVerifyBtn');
+            errEl.textContent = '';
+            if (!/^\d{4,8}$/.test(otp)) {
+                errEl.textContent = 'Enter the numeric code from the SMS.';
+                return;
+            }
+            if (!pendingSignupPhone) {
+                errEl.textContent = 'Session expired — close this and start signup again.';
+                return;
+            }
+            btn.disabled = true;
+            try {
+                const verifyRes = await fetch('/api/sms/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: pendingSignupPhone, otp })
+                });
+                const verifyData = await verifyRes.json();
+                if (!verifyRes.ok) {
+                    errEl.textContent = 'Code rejected: ' + (verifyData.detail?.error_description || verifyData.error || verifyRes.statusText);
+                    btn.disabled = false;
+                    return;
+                }
+                document.getElementById('smsModalBackdrop').style.display = 'none';
+                await continueSignupAfterSms(pendingSignupPhone, verifyData.proof);
+                pendingSignupPhone = null;
+            } catch (e) {
+                errEl.textContent = 'Verify error: ' + e.message;
+                btn.disabled = false;
+            }
+        };
+
+        async function continueSignupAfterSms(phone, smsProof) {
+            try {
                 const challengeResponse = await fetch('/api/passkey-signup-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         client_id: CLIENT_ID,
                         realm: PASSKEY_REALM,
-                        user_profile: { phone_number: phone, phone_verified: true }
+                        user_profile: { phone_number: phone }
                     })
                 });
                 
