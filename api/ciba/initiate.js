@@ -2,7 +2,8 @@ const axios = require('axios');
 const { jwtVerify, createRemoteJWKSet } = require('jose');
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
-const CLIENT_ID = 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W';
+const CLIENT_ID = process.env.AUTH0_SPA_CLIENT_ID;
+const CIBA_AUDIENCE = process.env.AUTH0_CIBA_AUDIENCE || 'api://beneficiary/manage';
 const JWKS = createRemoteJWKSet(new URL(`https://${AUTH0_DOMAIN}/.well-known/jwks.json`));
 
 module.exports = async (req, res) => {
@@ -48,7 +49,7 @@ module.exports = async (req, res) => {
     client_secret: (process.env.AUTH0_CIBA_CLIENT_SECRET || '').trim(),
     login_hint,
     binding_message,
-    audience: 'api://beneficiary/manage',
+    audience: CIBA_AUDIENCE,
     scope: 'openid add:beneficiary'
   });
 

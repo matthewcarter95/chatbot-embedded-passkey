@@ -7,10 +7,11 @@
     <script>
         console.log('HTML loaded');
         
-        // Auth0 Configuration (embedded)
+        // Auth0 Configuration (embedded) — phoneIdentifier branch
         const AUTH0_CONFIG = {
-            domain: 'passkey.demo-connect.us',
-            clientId: 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W'
+            domain: 'passkey-phone.demo-connect.us',
+            clientId: 'bm1VqfVAZZnhEwyh2Ees7T9NOz1XO6tk',
+            realm: 'phoneIdentifier'
         };
         window.AUTH0_CONFIG = AUTH0_CONFIG;
         console.log('AUTH0_CONFIG loaded:', AUTH0_CONFIG);
@@ -37,7 +38,7 @@
     <!-- Auth bar -->
     <div class="auth-bar">
         <div id="signedOutControls">
-            <input type="email" id="emailInput" placeholder="email@example.com" style="width:220px;">
+            <input type="tel" id="phoneInput" placeholder="+15551234567" style="width:220px;">
             <button onclick="signup()">Sign Up with Passkey</button>
             <button onclick="login()">Log In with Passkey</button>
         </div>
@@ -90,6 +91,7 @@
         let cibaPollTimer = null;
         const AUTH0_DOMAIN = window.AUTH0_CONFIG.domain;
         const CLIENT_ID = window.AUTH0_CONFIG.clientId;
+        const PASSKEY_REALM = window.AUTH0_CONFIG.realm;
 
         function decodeJwt(token) {
             try {
@@ -110,7 +112,7 @@
             if (rt) localStorage.setItem('refresh_token', rt);
         }
 
-        function applySession(tokenResponse, fallbackEmail) {
+        function applySession(tokenResponse, fallbackPhone) {
             const access = tokenResponse.access_token;
             const id = tokenResponse.id_token;
             const refresh = tokenResponse.refresh_token;
@@ -120,7 +122,7 @@
             if (refresh) localStorage.setItem('refresh_token', refresh);
             currentUser = {
                 sub: claims.sub || null,
-                email: claims.email || fallbackEmail || null
+                phone_number: claims.phone_number || fallbackPhone || null
             };
             conversationHistory = [];
             needsPushEnrollment = false;
@@ -165,20 +167,21 @@
         }
         
         // Sign up with passkey
-        function readEmailInput() {
-            const el = document.getElementById('emailInput');
-            const v = (el?.value || '').trim();
-            if (!v) {
-                showError('Enter your email above first.');
+        function readPhoneInput() {
+            const el = document.getElementById('phoneInput');
+            const raw = (el?.value || '').trim();
+            if (!raw) {
+                showError('Enter your phone number above first.');
                 el?.focus();
                 return null;
             }
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
-                showError('That does not look like a valid email.');
+            const compact = raw.replace(/[\s\-().]/g, '');
+            if (!/^\+?[1-9]\d{6,14}$/.test(compact)) {
+                showError('That does not look like a valid phone number. Use E.164 like +15551234567.');
                 el?.focus();
                 return null;
             }
-            return v;
+            return compact.startsWith('+') ? compact : '+' + compact;
         }
 
         window.signup = async function() {
@@ -186,16 +189,16 @@
                 clearError();
                 console.log('Starting signup...');
 
-                const email = readEmailInput();
-                if (!email) return;
-                
+                const phone = readPhoneInput();
+                if (!phone) return;
+
                 const challengeResponse = await fetch('/api/passkey-signup-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         client_id: CLIENT_ID,
-                        realm: 'DefaultTenantPasskey',
-                        user_profile: { email: email }
+                        realm: PASSKEY_REALM,
+                        user_profile: { phone_number: phone }
                     })
                 });
                 
@@ -241,7 +244,7 @@
                     throw new Error(signupData.error_description || 'Signup failed');
                 }
 
-                applySession(signupData, email);
+                applySession(signupData, phone);
                 enterSignedIn();
 
             } catch (error) {
@@ -255,16 +258,15 @@
                 clearError();
                 console.log('Starting login...');
 
-                const email = readEmailInput();
-                if (!email) return;
-                
+                const phone = readPhoneInput();
+                if (!phone) return;
+
                 const challengeResponse = await fetch('/api/passkey-login-challenge', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         client_id: CLIENT_ID,
-                        realm: 'DefaultTenantPasskey'
-                        // user_profile: { email: email }
+                        realm: PASSKEY_REALM
                     })
                 });
                 
@@ -307,7 +309,7 @@
                     throw new Error(loginData.error_description || 'Login failed');
                 }
 
-                applySession(loginData, email);
+                applySession(loginData, phone);
                 enterSignedIn();
 
             } catch (error) {
@@ -339,7 +341,7 @@
                     headers,
                     body: JSON.stringify({
                         message: message,
-                        email: currentUser && currentUser.email,
+                        phone_number: currentUser && currentUser.phone_number,
                         history: conversationHistory,
                         needsPushEnrollment: needsPushEnrollment
                     })
@@ -393,7 +395,7 @@
             document.getElementById('btnEnrollPush').classList.toggle('hidden', !signedIn);
             document.getElementById('btnAddBeneficiary').classList.toggle('hidden', !signedIn);
             document.getElementById('userInfo').textContent = signedIn
-                ? `Signed in as ${currentUser.email || currentUser.sub || 'user'}`
+                ? `Signed in as ${currentUser.phone_number || currentUser.sub || 'user'}`
                 : '';
             if (!signedIn) {
                 document.getElementById('enrollPanel').style.display = 'none';
@@ -434,7 +436,7 @@
                 console.log('[push] status response:', res.status, data);
                 if (res.ok && data.enrolled === false) {
                     needsPushEnrollment = true;
-                    const suggestion = `Hi ${currentUser.email || 'there'} — I notice you don't have push notifications enabled yet. ` +
+                    const suggestion = `Hi ${currentUser.phone_number || 'there'} — I notice you don't have push notifications enabled yet. ` +
                         `To help us protect important transactions like changing beneficiaries, would you like to enroll your phone now? ` +
                         `Just say yes when you're ready.`;
                     addMessageToChat(suggestion, 'bot');
@@ -734,7 +736,7 @@
             if (accessToken && idToken) {
                 const claims = decodeJwt(idToken);
                 if (claims && claims.exp && claims.exp * 1000 > Date.now()) {
-                    currentUser = { sub: claims.sub || null, email: claims.email || null };
+                    currentUser = { sub: claims.sub || null, phone_number: claims.phone_number || null };
                     conversationHistory = [];
                     enterSignedIn();
                 } else {

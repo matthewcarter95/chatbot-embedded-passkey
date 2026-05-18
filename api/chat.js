@@ -2,7 +2,7 @@ const axios = require('axios');
 const { jwtVerify, createRemoteJWKSet } = require('jose');
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
-const CLIENT_ID = 'n1k54VpNs3Hpp7hkxYFPUfRqNgXOaj6W';
+const CLIENT_ID = process.env.AUTH0_SPA_CLIENT_ID;
 const JWKS = createRemoteJWKSet(new URL(`https://${AUTH0_DOMAIN}/.well-known/jwks.json`));
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
 
   const authenticated = !!payload;
   const userId = payload?.sub || null;
-  const { message, email, history, needsPushEnrollment } = req.body || {};
+  const { message, phone_number, history, needsPushEnrollment } = req.body || {};
   if (!message) {
     return res.status(400).json({ error: 'Message required' });
   }
@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
       'You are a concise assistant inside a passkey-authenticated demo chatbot.',
       'The authenticated user is identified by:',
       `- user_id (Auth0 sub): ${userId}`,
-      `- email: ${email || 'unknown'}`,
+      `- phone_number: ${phone_number || 'unknown'}`,
       "Answer questions about the user's profile using these facts.",
       'For other questions, be brief and helpful.',
       '',
