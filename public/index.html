@@ -215,10 +215,10 @@
                 document.getElementById('smsModalBackdrop').style.display = 'flex';
                 document.getElementById('smsVerifyBtn').disabled = true;
 
-                const startRes = await fetch('/api/sms/start', {
+                const startRes = await fetch('/api/sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone_number: phone })
+                    body: JSON.stringify({ action: 'start', phone_number: phone })
                 });
                 const startData = await startRes.json();
                 if (!startRes.ok) {
@@ -255,10 +255,10 @@
             }
             btn.disabled = true;
             try {
-                const verifyRes = await fetch('/api/sms/verify', {
+                const verifyRes = await fetch('/api/sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone_number: pendingSignupPhone, otp })
+                    body: JSON.stringify({ action: 'verify', phone_number: pendingSignupPhone, otp })
                 });
                 const verifyData = await verifyRes.json();
                 if (!verifyRes.ok) {
